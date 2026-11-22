@@ -15,7 +15,7 @@ export async function routeModel(task, {env=process.env,fetchImpl=fetch}={}) {
   if (!token || token.length < 16) throw new Error('Missing OmniRoute API key');
   const model=env.HAK_OMNIROUTE_MODEL || 'auto';
   if (!/^[a-zA-Z0-9_./:-]{1,128}$/.test(model)) throw new Error('Invalid model identifier');
-  const response=await fetchImpl(cfg.baseUrl+'/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'user',content:validated.prompt}],stream:false}),signal:AbortSignal.timeout(60000)});
+  const response=await fetchImpl(cfg.baseUrl+'/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'user',content:validated.prompt}],stream:false}),redirect:'manual',signal:AbortSignal.timeout(60000)});
   if (!response.ok) throw new Error('Model gateway failed with HTTP '+response.status);
   const result=await response.json();
   const answer=result?.choices?.[0]?.message?.content;
