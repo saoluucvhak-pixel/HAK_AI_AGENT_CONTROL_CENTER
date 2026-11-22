@@ -11,7 +11,9 @@ test('backup verifies integrity, never overwrites, and rejects corrupted data',a
   const src=join(dir,'events.jsonl'),dest=join(dir,'backup.jsonl');
   const store=new EventStore(src);
   await store.add({taskId:'t1',agentId:'a1',status:'running'});
+  const sourceBytes=await readFile(src);
   const result=await backupObserver({source:src,destination:dest});
+  assert.deepEqual(await readFile(dest),sourceBytes);
   assert.equal(result.eventCount,1);
   const verified=await verifyObserverBackup({path:dest,expectedSha256:result.sha256});
   assert.equal(verified.valid,true);assert.equal(verified.restored,false);
