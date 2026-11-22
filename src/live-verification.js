@@ -8,7 +8,7 @@ export async function verifyOmniRoute({env=process.env,fetchImpl=fetch,now=()=>D
  try{
   gatewayConfig(env);
   const started=now();
-  const output=await routeModel({role:'developer',prompt:'Reply with exactly '+CHALLENGE+' and nothing else.'},{env,fetchImpl});
+  const output=await routeModel({role:'tester',sensitive:false,prompt:'Reply with exactly '+CHALLENGE+' and nothing else.'},{env,fetchImpl});
   const latencyMs=Math.max(0,now()-started);
   const verified=output.answer.trim()===CHALLENGE;
   return {...report,status:verified?'challenge-passed':'challenge-failed',verified,latencyMs,model:output.model,reason:verified?'Live response matched challenge; billing, model identity and production security remain unverified':'Provider response did not match challenge'};
