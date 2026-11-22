@@ -5,6 +5,7 @@ import {snapshots} from './github.js';
 import {createObserverApi} from './observer-api.js';
 import {EventStore} from './event-store.js';
 import {topology,toMermaid} from './topology.js';
+import {acceptanceReport} from './acceptance.js';
 const htmlPath=fileURLToPath(new URL('../web/index.html',import.meta.url));
 const port=Number(process.env.PORT||4317);
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid PORT');
@@ -25,6 +26,7 @@ export const server=createServer(async(req,res)=>{
   }
   if(req.method!=='GET'){res.writeHead(405);res.end('Method Not Allowed');return;}
   if(path==='/api/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,mode:'read-only',host}));return;}
+  if(path==='/api/acceptance'){res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(acceptanceReport()));return;}
   if(path==='/api/topology'||path==='/api/topology.mmd'){
    const graph=topology(cache||[]);
    res.writeHead(200,{'Content-Type':path.endsWith('.mmd')?'text/plain; charset=utf-8':'application/json; charset=utf-8'});
