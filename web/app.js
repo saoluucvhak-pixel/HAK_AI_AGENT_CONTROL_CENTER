@@ -24,17 +24,16 @@ async function load(){
    $('repos').append(card);
   }
   $('status').textContent='Nguồn GitHub API · cập nhật lúc '+new Date(data.updatedAt).toLocaleString('vi-VN')+'. Dữ liệu có thể trễ tối đa 60 giây.';
+  await loadTopology();
  }catch(e){$('status').textContent='Không tải được dữ liệu: '+e.message;}
  finally{$('refresh').disabled=false;}
 }
 $('refresh').addEventListener('click',load);load();
 
-$('load-agents').addEventListener('click',async()=>{
- const token=$('observer-token').value;
- if(!token){$('agent-status').textContent='Nhập token để đọc trạng thái';return;}
+async function loadAgents(){
  $('agent-status').textContent='Đang đọc Observer…';
  try{
-  const r=await fetch('/api/agent-status',{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+  const r=await fetch('/api/agent-status',{cache:'no-store'});
   if(!r.ok)throw new Error('HTTP '+r.status);
   const data=await r.json();
   $('agents').replaceChildren();
@@ -43,9 +42,11 @@ $('load-agents').addEventListener('click',async()=>{
    card.append(el('h3',task.taskId),el('p','Agent: '+task.agentId+' · Trạng thái: '+task.status+' · '+task.at));
    $('agents').append(card);
   }
-  $('agent-status').textContent=(data.tasks||[]).length+' tác vụ · '+data.source+' · không lưu bền vững';
+  $('agent-status').textContent=(data.tasks||[]).length+' tác vụ · '+data.source+' · '+(data.persistent?'đã lưu bền vững':'chỉ lưu trong bộ nhớ');
  }catch(e){$('agent-status').textContent='Không thể đọc Observer: '+e.message;}
-});
+}
+$('load-agents').addEventListener('click',loadAgents);
+loadAgents();
 
 async function loadTopology(){
  try{
@@ -57,7 +58,7 @@ async function loadTopology(){
   }
  }catch(e){$('topology').textContent='Không tải được sơ đồ: '+e.message;}
 }
-loadTopology();
+// Topology refreshes after GitHub repository data loads.
 
 async function loadAcceptance(){
  try{

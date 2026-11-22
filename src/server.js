@@ -1,4 +1,5 @@
 import {createServer} from 'node:http';
+import {randomBytes} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {snapshots} from './github.js';
@@ -10,9 +11,10 @@ const htmlPath=fileURLToPath(new URL('../web/index.html',import.meta.url));
 const port=Number(process.env.PORT||4317);
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid PORT');
 const host='127.0.0.1';
-const observerStore=process.env.HAK_OBSERVER_TOKEN?.length>=24?new EventStore(process.env.HAK_EVENT_STORE_PATH||'./data/agent-events.jsonl'):null;
-if(observerStore)await observerStore.load();
-const observer=observerStore?createObserverApi({token:process.env.HAK_OBSERVER_TOKEN,registry:observerStore}):null;
+const observerToken=process.env.HAK_OBSERVER_TOKEN||randomBytes(32).toString('hex');
+const observerStore=new EventStore(process.env.HAK_EVENT_STORE_PATH||'./data/agent-events.jsonl');
+await observerStore.load();
+const observer=createObserverApi({token:observerToken,registry:observerStore,localReadOnly:true});
 let cache=null,cacheTime=0;
 export const server=createServer(async(req,res)=>{
  const path=new URL(req.url||'/', 'http://localhost').pathname;
@@ -21,7 +23,6 @@ export const server=createServer(async(req,res)=>{
  res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'");
  try{
   if(path==='/api/agent-events'||path==='/api/agent-status'){
-   if(!observer){res.writeHead(503,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'Observer disabled; set HAK_OBSERVER_TOKEN'}));return;}
    await observer(req,res,path);return;
   }
   if(req.method!=='GET'){res.writeHead(405);res.end('Method Not Allowed');return;}

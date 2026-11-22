@@ -33,7 +33,7 @@ test('real server: health, UI, auth, event persistence across restart, topology'
   const first=await launch(port,path);process1=first.child;
   const {base}=first;
   let r=await fetch(base+'/');assert.equal(r.status,200);assert.match(await r.text(),/HAK AI Operations/);
-  r=await fetch(base+'/api/agent-status');assert.equal(r.status,401);
+  r=await fetch(base+'/api/agent-status');assert.equal(r.status,200);assert.equal((await r.json()).persistent,true);
   r=await fetch(base+'/api/topology');assert.equal(r.status,200);const graph=await r.json();assert.equal(graph.kind,'hak-topology-proposal');assert.ok(graph.edges.every(e=>e.verified===false));
   r=await fetch(base+'/api/topology.mmd');assert.equal(r.status,200);assert.match(await r.text(),/flowchart TD/);
   r=await fetch(base+'/api/agent-events',{method:'POST',headers:{authorization:'Bearer '+secret,'content-type':'application/json'},body:JSON.stringify({taskId:'smoke-1',agentId:'test-agent',status:'running'})});
