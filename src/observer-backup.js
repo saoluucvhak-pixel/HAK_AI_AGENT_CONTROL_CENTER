@@ -1,4 +1,4 @@
-import {readFile,writeFile,mkdir,open} from 'node:fs/promises';
+import {readFile,mkdir,open} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {resolve,dirname} from 'node:path';
 import {EventStore} from './event-store.js';
