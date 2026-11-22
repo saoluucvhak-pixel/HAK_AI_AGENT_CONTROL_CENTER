@@ -1,4 +1,4 @@
-import {readFile,mkdir,open} from 'node:fs/promises';
+import {readFile,mkdir,open,stat} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {resolve,dirname} from 'node:path';
 import {EventStore} from './event-store.js';
@@ -7,8 +7,13 @@ export async function backupObserver({source='./data/agent-events.jsonl',destina
  if(typeof destination!=='string'||!destination.trim())throw new Error('Backup destination required');
  const src=resolve(source),dest=resolve(destination);
  if(src===dest)throw new Error('Backup destination must differ from source');
+ const before=await stat(src);
+ if(!before.isFile())throw new Error('Observer source must be a regular file');
  const store=new EventStore(src);await store.load();
+ const after=await stat(src);
+ if(before.size!==after.size||before.mtimeMs!==after.mtimeMs)throw new Error('Observer source changed during backup; stop the dashboard and retry');
  const events=store.list();
+ if(events.length===0)throw new Error('Observer source has no events; refusing empty backup');
  const data=events.map(e=>JSON.stringify(e)).join('\n')+(events.length?'\n':'');
  const digest=createHash('sha256').update(data).digest('hex');
  await mkdir(dirname(dest),{recursive:true,mode:0o700});
