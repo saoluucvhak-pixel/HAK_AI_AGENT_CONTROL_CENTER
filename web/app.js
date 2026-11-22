@@ -28,3 +28,21 @@ async function load(){
  finally{$('refresh').disabled=false;}
 }
 $('refresh').addEventListener('click',load);load();
+
+$('load-agents').addEventListener('click',async()=>{
+ const token=$('observer-token').value;
+ if(!token){$('agent-status').textContent='Nhập token để đọc trạng thái';return;}
+ $('agent-status').textContent='Đang đọc Observer…';
+ try{
+  const r=await fetch('/api/agent-status',{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const data=await r.json();
+  $('agents').replaceChildren();
+  for(const task of data.tasks||[]){
+   const card=el('article',undefined,'repo');
+   card.append(el('h3',task.taskId),el('p','Agent: '+task.agentId+' · Trạng thái: '+task.status+' · '+task.at));
+   $('agents').append(card);
+  }
+  $('agent-status').textContent=(data.tasks||[]).length+' tác vụ · '+data.source+' · không lưu bền vững';
+ }catch(e){$('agent-status').textContent='Không thể đọc Observer: '+e.message;}
+});
