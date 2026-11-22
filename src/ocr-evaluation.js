@@ -13,13 +13,20 @@ function distance(a,b){
  }
  return prev[y.length];
 }
-export function evaluateOcr(cases,{maxCharacters=20000}={}){
+export function evaluateOcr(cases,{maxCharacters=20000,maxDistanceCells=2000000}={}){
+ if(!Number.isSafeInteger(maxCharacters)||maxCharacters<1||maxCharacters>20000)throw new Error('Invalid maxCharacters');
+ if(!Number.isSafeInteger(maxDistanceCells)||maxDistanceCells<1||maxDistanceCells>2000000)throw new Error('Invalid maxDistanceCells');
  if(!Array.isArray(cases)||cases.length===0||cases.length>1000)throw new Error('Expected 1..1000 OCR cases');
- let edits=0,characters=0,passed=0;
+ let edits=0,characters=0,passed=0,work=0;
  const checks=cases.map((item,i)=>{
   if(!item||typeof item!=='object'||item.approved!==true||item.sensitive!==false)throw new Error('Case '+i+' requires approval and explicit non-sensitive classification');
   const expected=normalize(item.expected),actual=normalize(item.actual);
   if(expected.length===0||expected.length>maxCharacters||actual.length>maxCharacters)throw new Error('Invalid OCR case length');
+  const expectedPoints=Array.from(expected).length,actualPoints=Array.from(actual).length;
+  if(expectedPoints===0||expectedPoints>maxCharacters||actualPoints>maxCharacters)throw new Error('Invalid OCR case code-point length');
+  const cells=expectedPoints*actualPoints;
+  if(cells>maxDistanceCells-work)throw new Error('OCR comparison work budget exceeded');
+  work+=cells;
   const errors=distance(expected,actual);
   edits+=errors;characters+=Array.from(expected).length;
   const exact=expected===actual;if(exact)passed++;
