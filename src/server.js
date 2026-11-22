@@ -27,7 +27,7 @@ export const server=createServer(async(req,res)=>{
    await observer(req,res,path);return;
   }
   if(req.method!=='GET'){res.writeHead(405);res.end('Method Not Allowed');return;}
-  if(path==='/api/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,mode:'read-only',host}));return;}
+  if(path==='/api/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,app:'hak-agent-control-center',mode:'read-only',host}));return;}
   if(path==='/api/diagnostics'){
    const report=await probeTools();
    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
