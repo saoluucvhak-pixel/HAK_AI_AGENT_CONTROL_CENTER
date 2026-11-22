@@ -6,12 +6,12 @@ export function createObserverApi({token,registry=new TaskRegistry()}={}){
   res.setHeader('Content-Type','application/json; charset=utf-8');
   const respond=(status,body)=>{res.writeHead(status);res.end(JSON.stringify(body));};
   if(req.headers.authorization!=='Bearer '+token){respond(401,{error:'unauthorized'});return true;}
-  if(path==='/api/agent-status'&&req.method==='GET'){respond(200,{tasks:registry.summary(),source:'local-observer-memory',persistent:false});return true;}
+  if(path==='/api/agent-status'&&req.method==='GET'){respond(200,{tasks:registry.summary(),source:registry.persistent?'local-observer-jsonl':'local-observer-memory',persistent:registry.persistent===true});return true;}
   if(path==='/api/agent-events'&&req.method==='POST'){
    let body='',size=0;
    try{
     for await(const chunk of req){size+=chunk.length;if(size>8192){respond(413,{error:'payload too large'});return true;}body+=chunk.toString('utf8');}
-    const event=registry.add(JSON.parse(body));
+    const event=await registry.add(JSON.parse(body));
     respond(201,event);
    }catch{respond(400,{error:'invalid event'});}
    return true;

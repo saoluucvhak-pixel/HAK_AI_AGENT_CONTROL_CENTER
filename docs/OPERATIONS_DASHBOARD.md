@@ -37,3 +37,8 @@ Click 'Đọc trạng thái Agent'. This tests a synthetic event, not a real Ruf
 
 ## Outstanding production gates
 Persistent event store, authentication/RBAC for network users, audit log, per-project data isolation, GitHub API pagination and rate-limit handling, provider telemetry, Archify renderer integration, real OCR statistics, independent security review and an end-to-end Windows deployment test. Do not label these complete.
+
+## Persistence and topology (next milestone)
+When `HAK_OBSERVER_TOKEN` is set, Observer events are appended to `HAK_EVENT_STORE_PATH` (default `./data/agent-events.jsonl`) with an fsync before acknowledgment, replayed on restart. The file is sensitive: use local NTFS permissions, backup policy and disk encryption. A corrupt log fails startup rather than silently discarding records. No compaction or retention policy yet.
+GET `/api/topology` returns an explicitly **proposed** HAK architecture graph, and GET `/api/topology.mmd` exports Mermaid text for manual Archify review. This is not the Archify runtime.
+The dashboard remains bound to localhost. Do not publish these endpoints or open a network listener without authentication/RBAC and threat modeling.

@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {topology,toMermaid} from '../src/topology.js';import {REPOSITORIES} from '../src/github.js';
+test('topology covers only approved repositories',()=>{const graph=topology();assert.equal(graph.nodes.length,REPOSITORIES.length);assert.ok(graph.edges.every(e=>e.verified===false));assert.ok(graph.nodes.every(n=>REPOSITORIES.includes(n.repo)))});
+test('mermaid export includes nodes and edges',()=>{const text=toMermaid(topology());assert.match(text,/flowchart TD/);assert.match(text,/control -->/);assert.match(text,/HAK OCR Engine/)});
