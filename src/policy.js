@@ -8,7 +8,7 @@ export function validateTask(task) {
 }
 export function memoryPolicy(record) {
   if (!record || typeof record !== 'object' || Array.isArray(record)) throw new TypeError('Invalid memory record');
-  if (record.approved !== true || record.sensitive === true) return {allowed:false,reason:'Memory requires approval and non-sensitive classification'};
+  if (record.approved !== true || record.sensitive !== false) return {allowed:false,reason:'Memory requires approval and non-sensitive classification'};
   if (typeof record.projectId !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(record.projectId)) throw new Error('Invalid project scope');
   if (typeof record.summary !== 'string' || !record.summary.trim() || record.summary.length > 4000) throw new Error('Invalid summary');
   return {allowed:true,projectId:record.projectId,summary:record.summary};
