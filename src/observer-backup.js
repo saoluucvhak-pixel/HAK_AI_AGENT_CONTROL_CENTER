@@ -9,12 +9,13 @@ export async function backupObserver({source='./data/agent-events.jsonl',destina
  if(src===dest)throw new Error('Backup destination must differ from source');
  const before=await stat(src);
  if(!before.isFile())throw new Error('Observer source must be a regular file');
+ const original=await readFile(src);
  const store=new EventStore(src);await store.load();
  const after=await stat(src);
- if(before.size!==after.size||before.mtimeMs!==after.mtimeMs)throw new Error('Observer source changed during backup; stop the dashboard and retry');
+ if(before.size!==after.size||before.mtimeMs!==after.mtimeMs||before.ino!==after.ino)throw new Error('Observer source changed during backup; stop the dashboard and retry');
  const events=store.list();
  if(events.length===0)throw new Error('Observer source has no events; refusing empty backup');
- const data=events.map(e=>JSON.stringify(e)).join('\n')+(events.length?'\n':'');
+ const data=original;
  const digest=createHash('sha256').update(data).digest('hex');
  await mkdir(dirname(dest),{recursive:true,mode:0o700});
  const file=await open(dest,'wx',0o600);
