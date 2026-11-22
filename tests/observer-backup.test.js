@@ -19,5 +19,8 @@ test('backup verifies integrity, never overwrites, and rejects corrupted data',a
   await writeFile(dest,(await readFile(dest,'utf8'))+'tampered');
   assert.equal((await verifyObserverBackup({path:dest,expectedSha256:result.sha256})).valid,false);
   await assert.rejects(()=>backupObserver({source:src,destination:src}));
+  await assert.rejects(()=>backupObserver({source:join(dir,'missing.jsonl'),destination:join(dir,'missing-backup.jsonl')}),{code:'ENOENT'});
+  const empty=join(dir,'empty.jsonl');await writeFile(empty,'');
+  await assert.rejects(()=>backupObserver({source:empty,destination:join(dir,'empty-backup.jsonl')}),/no events/);
  }finally{await rm(dir,{recursive:true,force:true})}
 });
