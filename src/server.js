@@ -8,6 +8,7 @@ import {EventStore} from './event-store.js';
 import {topology,toMermaid} from './topology.js';
 import {acceptanceReport} from './acceptance.js';
 import {probeTools} from './readiness-probes.js';
+import {evidenceSnapshot} from './evidence.js';
 const htmlPath=fileURLToPath(new URL('../web/index.html',import.meta.url));
 const port=Number(process.env.PORT||4317);
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid PORT');
@@ -28,6 +29,12 @@ export const server=createServer(async(req,res)=>{
   }
   if(req.method!=='GET'){res.writeHead(405);res.end('Method Not Allowed');return;}
   if(path==='/api/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,app:'hak-agent-control-center',mode:'read-only',host}));return;}
+  if(path==='/api/evidence'){
+   const diagnostics=await probeTools();
+   const report=evidenceSnapshot({diagnostics,observer:{persistent:observerStore.persistent,tasks:observerStore.summary()}});
+   res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="hak-acceptance-evidence.json"'});
+   res.end(JSON.stringify(report,null,2));return;
+  }
   if(path==='/api/diagnostics'){
    const report=await probeTools();
    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});

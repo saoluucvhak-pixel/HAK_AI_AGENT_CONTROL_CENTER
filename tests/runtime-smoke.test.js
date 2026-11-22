@@ -35,6 +35,7 @@ test('real server: health, UI, auth, event persistence across restart, topology'
   let r=await fetch(base+'/');assert.equal(r.status,200);assert.match(await r.text(),/HAK AI Operations/);
   r=await fetch(base+'/api/agent-status');assert.equal(r.status,200);assert.equal((await r.json()).persistent,true);
   r=await fetch(base+'/api/diagnostics');assert.equal(r.status,200);const diagnostics=await r.json();assert.equal(diagnostics.checks.length,5);assert.equal(diagnostics.readyForProduction,false);assert.ok(diagnostics.checks.every(x=>x.verified===false));
+  r=await fetch(base+'/api/evidence');assert.equal(r.status,200);const evidence=await r.json();assert.equal(evidence.readyForProduction,false);assert.ok(evidence.pending.includes('ruflo-live'));
   r=await fetch(base+'/api/topology');assert.equal(r.status,200);const graph=await r.json();assert.equal(graph.kind,'hak-topology-proposal');assert.ok(graph.edges.every(e=>e.verified===false));
   r=await fetch(base+'/api/topology.mmd');assert.equal(r.status,200);assert.match(await r.text(),/flowchart TD/);
   r=await fetch(base+'/api/agent-events',{method:'POST',headers:{authorization:'Bearer '+secret,'content-type':'application/json'},body:JSON.stringify({taskId:'smoke-1',agentId:'test-agent',status:'running'})});
