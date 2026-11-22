@@ -8,10 +8,13 @@ permissions:
   contents: read
 jobs:
   node:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
     strategy:
+      fail-fast: false
       matrix:
-        node: [20, 22]
+        os: [ubuntu-24.04, windows-2022]
+        node: [22]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
