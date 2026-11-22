@@ -1,0 +1,1 @@
+{"name":"hak-ai-agent-control-center","version":"0.1.0","private":true,"type":"module","scripts":{"test":"node --test tests/*.test.js","check":"node --check src/server.js && node --check src/core.js","start":"node src/server.js"},"engines":{"node":">=20"}}
