@@ -30,6 +30,6 @@ export class EventStore {
   const pending=this.#tail.then(write);this.#tail=pending.then(()=>undefined,()=>undefined);
   return pending;
  }
- summary(){const latest=new Map();for(const e of this.#events)latest.set(e.taskId,e);return [...latest.values()].map(e=>({...e}));}
+ get persistent(){return true;}\n summary(){const latest=new Map();for(const e of this.#events)latest.set(e.taskId,e);return [...latest.values()].map(e=>({...e}));}
  list(){return this.#events.map(e=>({...e}));}
 }
