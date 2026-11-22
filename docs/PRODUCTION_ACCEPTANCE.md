@@ -24,3 +24,6 @@ The CI matrix runs on GitHub-hosted Windows Server 2022 and Ubuntu 24.04 with No
 | Security | Independent review, RBAC, backup/restore | Pending |
 
 A green connectivity probe is never sufficient to mark a tool production-ready.
+
+## Optional real OmniRoute challenge
+`npm run verify:omniroute` is fail-closed by default. It performs a single minimal, non-sensitive model request only if `HAK_OMNIROUTE_LIVE_TEST=true`, `HAK_OMNIROUTE_ENABLED=true`, a valid local `HAK_OMNIROUTE_URL`, and a private `HAK_OMNIROUTE_API_KEY` are already configured by the operator. The check compares an exact marker and prints no answer text or credentials. A pass confirms only that the configured local gateway returned the expected text; it does not independently verify provider identity, billing, licensing or production readiness. CI uses mocks and never calls a paid provider.
