@@ -46,3 +46,15 @@ $('load-agents').addEventListener('click',async()=>{
   $('agent-status').textContent=(data.tasks||[]).length+' tác vụ · '+data.source+' · không lưu bền vững';
  }catch(e){$('agent-status').textContent='Không thể đọc Observer: '+e.message;}
 });
+
+async function loadTopology(){
+ try{
+  const r=await fetch('/api/topology');if(!r.ok)throw new Error('HTTP '+r.status);
+  const graph=await r.json();$('topology').replaceChildren();
+  for(const node of graph.nodes){
+   const card=el('article',undefined,'repo');card.append(el('h3',node.label),el('p','Nguồn: '+node.github+' · '+node.status));
+   addLink(card,node.sourceUrl,'Xem repository');$('topology').append(card);
+  }
+ }catch(e){$('topology').textContent='Không tải được sơ đồ: '+e.message;}
+}
+loadTopology();
