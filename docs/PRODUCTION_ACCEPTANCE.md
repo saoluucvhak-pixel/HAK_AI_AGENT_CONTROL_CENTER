@@ -33,3 +33,6 @@ On a trusted local computer, prepare a private JSON array of transcription pairs
 
 ## Local Observer backup integrity
 Stop the Dashboard before backing up to avoid concurrent writes. Run `npm run backup:observer -- create ./data/agent-events.jsonl <new-private-backup-path>`; this refuses to overwrite an existing backup and prints a SHA256 digest. Run `npm run backup:observer -- verify <backup-path> <sha256>` to verify the checksum and JSONL event structure. The verification command **does not restore** or modify the live store. Keep backups in a user-protected location; they contain task IDs, agent IDs and event timestamps. Test recovery separately on a non-production copy before approving production use.
+
+## Isolated recovery drill
+Run `npm run drill:observer -- <backup-path> <sha256>` after creating and verifying a private Observer backup. The drill checks SHA256, copies the backup into a temporary directory, replays the event store, compares event counts, and removes the temporary copy. It never overwrites or modifies the active Observer store. This is automated recovery rehearsal only, not a full operational restore or production sign-off.
