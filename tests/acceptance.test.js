@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {acceptanceReport} from '../src/acceptance.js';
+test('green CI alone cannot certify external tools or production',()=>{const report=acceptanceReport({ci:'passed',review:'approved',approval:'approved',conflicts:false,security:'passed'});assert.equal(report.readyForProduction,false);assert.ok(report.checks.some(x=>x.id==='ruflo-live'&&x.status==='not-verified'));assert.ok(report.checks.some(x=>x.id==='windows-desktop'&&x.status==='not-verified'))});

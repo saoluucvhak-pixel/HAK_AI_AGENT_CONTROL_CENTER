@@ -58,3 +58,15 @@ async function loadTopology(){
  }catch(e){$('topology').textContent='Không tải được sơ đồ: '+e.message;}
 }
 loadTopology();
+
+async function loadAcceptance(){
+ try{
+  const r=await fetch('/api/acceptance');if(!r.ok)throw new Error('HTTP '+r.status);
+  const report=await r.json();$('acceptance').replaceChildren();
+  for(const check of report.checks){
+   const card=el('article',undefined,'repo');card.append(el('h3',check.label),el('p',check.status+(check.evidence?' · '+check.evidence:'')));
+   $('acceptance').append(card);
+  }
+ }catch(e){$('acceptance').textContent='Không tải được nghiệm thu: '+e.message;}
+}
+loadAcceptance();

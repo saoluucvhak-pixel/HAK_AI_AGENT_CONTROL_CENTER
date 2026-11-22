@@ -3,7 +3,7 @@ export function validateTask(task) {
   if (!task || typeof task !== 'object' || Array.isArray(task)) throw new TypeError('Invalid task');
   if (!ALLOWED_ROLES.includes(task.role)) throw new Error('Unrecognized role');
   if (typeof task.prompt !== 'string' || !task.prompt.trim() || task.prompt.length > 32000) throw new Error('Invalid prompt');
-  if (task.sensitive === true) throw new Error('Sensitive tasks require explicit policy approval');
+  if (task.sensitive !== false) throw new Error('Explicit non-sensitive classification required');
   return {role:task.role,prompt:task.prompt};
 }
 export function memoryPolicy(record) {
