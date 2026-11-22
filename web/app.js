@@ -71,3 +71,22 @@ async function loadAcceptance(){
  }catch(e){$('acceptance').textContent='Không tải được nghiệm thu: '+e.message;}
 }
 loadAcceptance();
+
+async function checkTools(){
+ $('check-tools').disabled=true;
+ $('diagnostics-status').textContent='Đang kiểm tra kết nối cục bộ…';
+ try{
+  const r=await fetch('/api/diagnostics',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);
+  const report=await r.json();$('diagnostics').replaceChildren();
+  const labels={'omniroute':'OmniRoute','ruflo':'Ruflo','claude-mem':'Claude-Mem','archify':'Archify','ocr':'HAK OCR'};
+  const statuses={'not-configured':'Chưa cấu hình','endpoint-reachable':'Kết nối HTTP được (chưa xác minh chức năng)','http-error':'Dịch vụ trả lỗi HTTP','unreachable-or-invalid':'Không kết nối được hoặc URL không hợp lệ'};
+  for(const check of report.checks||[]){
+   const card=el('article',undefined,'repo');
+   card.append(el('h3',labels[check.id]||check.id),el('p',(statuses[check.status]||check.status)+(check.httpStatus?' · HTTP '+check.httpStatus:'')));
+   $('diagnostics').append(card);
+  }
+  $('diagnostics-status').textContent='Đã kiểm tra '+(report.checks||[]).length+' công cụ lúc '+new Date(report.checkedAt).toLocaleString('vi-VN')+'. Chưa chứng nhận vận hành chính thức.';
+ }catch(e){$('diagnostics-status').textContent='Không thể kiểm tra: '+e.message;}
+ finally{$('check-tools').disabled=false;}
+}
+$('check-tools').addEventListener('click',checkTools);
