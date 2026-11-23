@@ -3,7 +3,7 @@
 This acceptance is **opt-in and performs real GitHub writes**. It is not a mock. Do not run on production data. The script only accepts `HAK_AI_AGENT_CONTROL_CENTER` and `hak-fix/acceptance-...` branches.
 
 ## Preconditions
-- A dedicated, non-sensitive existing text file on `main` and an approved proposed replacement.
+- The dedicated, non-sensitive existing `tests/fixtures/patch-acceptance.txt` on `main` and an approved proposed replacement. The script refuses changes to any other path.
 - A completed GitHub Actions run with `head_sha` equal to the exact `main` SHA in the proposal.
 - The current Git blob SHA for each changed file.
 - A GitHub token scoped to this repository with Contents and Pull Requests write permissions.
@@ -23,7 +23,7 @@ Example proposal schema (replace placeholders with real observed SHA values, nev
 }
 ```
 
-Use an **existing** fixture file: the proposal validator and executor intentionally do not support new files.
+The fixture must already exist on `main`. The proposal validator and executor intentionally do not support new files. The example is illustrative and not a ready-to-run proposal.
 
 Run only after reviewing the exact patch:
 
