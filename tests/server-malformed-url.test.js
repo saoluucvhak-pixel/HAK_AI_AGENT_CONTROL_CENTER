@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {server} from '../src/server.js';
+// Import only after disabling the production listener; otherwise node --test may hang.
+process.env.NODE_ENV='test';
+const {server}=await import('../src/server.js');
 
 test('malformed request URL is handled without unhandled rejection',async()=>{
   let status;let body;
