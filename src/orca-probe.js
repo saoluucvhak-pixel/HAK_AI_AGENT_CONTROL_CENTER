@@ -1,6 +1,12 @@
 import {spawnSync} from 'node:child_process';
+function safeCliEnv(env) {
+  const allowed=['PATH','Path','PATHEXT','SystemRoot','WINDIR','HOME','USERPROFILE','APPDATA','LOCALAPPDATA','TMP','TEMP'];
+  const result={NO_COLOR:'1'};
+  for(const key of allowed) if(typeof env[key]==='string') result[key]=env[key];
+  return result;
+}
 /** Read-only Orca desktop connectivity probe; never launches agents or approves PRs. */
-export function probeOrca({enabled=false,run=spawnSync}={}) {
+export function probeOrca({enabled=false,run=spawnSync,env=process.env}={}) {
   if (!enabled) return {status:'disabled',connected:false};
   let result;
   try {
