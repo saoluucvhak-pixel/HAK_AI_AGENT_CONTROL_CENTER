@@ -2,3 +2,14 @@ import test from 'node:test';import assert from 'node:assert/strict';import {saf
 test('allowlist prevents arbitrary GitHub path',()=>{assert.throws(()=>safeRepo('../../secrets'));assert.equal(safeRepo('HAK_OCR_ENGINE'),'HAK_OCR_ENGINE')});
 test('real response is normalized and sourced',async()=>{let calls=0;const fake=async url=>{calls++;const body=url.endsWith('/pulls?state=open&per_page=30')?[{number:1,title:'test',draft:true,html_url:'https://github.com/test/pr',updated_at:'2026-01-01'}]:url.endsWith('/actions/runs?per_page=10')?{workflow_runs:[{id:10,name:'CI',status:'completed',conclusion:'success',html_url:'https://github.com/test/actions',created_at:'2026-01-01'}]}:{private:false,default_branch:'main'};return{ok:true,json:async()=>body}};const result=await githubSnapshot('HAK_OCR_ENGINE',{fetchImpl:fake});assert.equal(calls,3);assert.equal(result.openPullRequests,1);assert.equal(result.latestRun.conclusion,'success');assert.equal(result.source,'github-api')});
 test('GitHub error is not represented as zero activity',async()=>{const rows=await snapshots({fetchImpl:async()=>({ok:false,status:403})});assert.equal(rows.length,REPOSITORIES.length);assert.ok(rows.every(x=>x.error.includes('403')&&!Object.hasOwn(x,'openPullRequests')))});
+
+test('30 open PRs are explicitly reported as a lower bound',async()=>{
+ const fake=async url=>({ok:true,json:async()=>
+  url.includes('/pulls?')?Array.from({length:30},(_,i)=>({number:i+1,title:'PR',draft:false,html_url:'https://github.com/example/pr',updated_at:'2026-01-01'})):
+  url.includes('/actions/runs?')?{workflow_runs:[]}:
+  {private:false,default_branch:'main'}
+ });
+ const result=await githubSnapshot('HAK_OCR_ENGINE',{fetchImpl:fake,token:''});
+ assert.equal(result.openPullRequests,30);
+ assert.equal(result.openPullRequestsCountIsLowerBound,true);
+});
