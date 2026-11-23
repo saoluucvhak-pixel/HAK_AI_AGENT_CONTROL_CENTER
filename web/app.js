@@ -7,7 +7,7 @@ async function load(){
   const r=await fetch('/api/repos',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);
   const data=await r.json();const repos=data.repos||[];
   $('repos-count').textContent=repos.length;
-  $('prs-count').textContent=repos.reduce((n,r)=>n+(r.openPullRequests||0),0);
+  $('prs-count').textContent=(repos.some(r=>r.openPullRequestsCountIsLowerBound)?'≥ ':'')+repos.reduce((n,r)=>n+(r.openPullRequests||0),0);
   $('ci-count').textContent=repos.filter(r=>r.latestRun?.conclusion==='success').length;
   $('errors-count').textContent=repos.filter(r=>r.error).length;
   $('repos').replaceChildren();
@@ -16,7 +16,7 @@ async function load(){
    card.append(title);
    if(repo.error){card.append(el('p','Không đọc được: '+repo.error,'warning'));}
    else{
-    card.append(el('p','PR đang mở: '+repo.openPullRequests+' · Nhánh: '+repo.defaultBranch));
+    card.append(el('p','PR đang mở: '+(repo.openPullRequestsCountIsLowerBound?'≥ ':'')+repo.openPullRequests+' · Nhánh: '+repo.defaultBranch));
     const ci=repo.latestRun;card.append(el('p',ci?'CI gần nhất: '+ci.status+' / '+(ci.conclusion||'chưa kết luận'):'Chưa có lần chạy CI được trả về'));
     if(ci)addLink(card,ci.url,'Xem GitHub Actions');
     for(const pr of repo.prs||[])addLink(card,pr.url,'PR #'+pr.number+(pr.draft?' (Draft)':'')+': '+pr.title);

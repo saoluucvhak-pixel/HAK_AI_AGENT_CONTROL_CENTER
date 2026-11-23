@@ -12,7 +12,7 @@ export async function githubSnapshot(name,{fetchImpl=fetch,token=process.env.GIT
  }
  const [repo,prs,runs]=await Promise.all([read(''),read('/pulls?state=open&per_page=30'),read('/actions/runs?per_page=10')]);
  const latest=runs.workflow_runs?.[0];
- return {name,visibility:repo.private?'private':'public',defaultBranch:repo.default_branch,openPullRequests:prs.length,prs:prs.map(p=>({number:p.number,title:p.title,draft:p.draft,url:p.html_url,updatedAt:p.updated_at})),latestRun:latest?{id:latest.id,name:latest.name,status:latest.status,conclusion:latest.conclusion,url:latest.html_url,createdAt:latest.created_at}:null,observedAt:new Date().toISOString(),source:'github-api'};
+ return {name,visibility:repo.private?'private':'public',defaultBranch:repo.default_branch,openPullRequests:prs.length,openPullRequestsCountIsLowerBound:prs.length===30,prs:prs.map(p=>({number:p.number,title:p.title,draft:p.draft,url:p.html_url,updatedAt:p.updated_at})),latestRun:latest?{id:latest.id,name:latest.name,status:latest.status,conclusion:latest.conclusion,url:latest.html_url,createdAt:latest.created_at}:null,observedAt:new Date().toISOString(),source:'github-api'};
 }
 export async function snapshots(options={}){
  return Promise.all(REPOSITORIES.map(async name=>{try{return await githubSnapshot(name,options)}catch(e){return{name,error:String(e.message||e),source:'github-api',observedAt:new Date().toISOString()}}}));
