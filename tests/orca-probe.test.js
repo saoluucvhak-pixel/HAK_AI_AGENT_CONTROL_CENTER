@@ -23,3 +23,19 @@ test('Orca probe fails closed and never exposes raw CLI output',()=>{
     assert.doesNotMatch(JSON.stringify(result),/SECRET/);
   }
 });
+
+test('Orca CLI subprocess receives only required OS variables, not HAK credentials',()=>{
+  let received;
+  const result=probeOrca({enabled:true,env:{
+    PATH:'/usr/bin',HOME:'/home/operator',SystemRoot:'C:\\Windows',
+    GITHUB_TOKEN:'secret-github',HAK_OBSERVER_TOKEN:'secret-observer',
+    HAK_OMNIROUTE_API_KEY:'secret-provider',ANTHROPIC_API_KEY:'secret-model'
+  },run:(_cmd,_args,opts)=>{received=opts.env;return {status:0,stdout:'{"ok":true}'};}});
+  assert.equal(result.connected,true);
+  assert.equal(received.PATH,'/usr/bin');
+  assert.equal(received.HOME,'/home/operator');
+  assert.equal(received.SystemRoot,'C:\\Windows');
+  assert.equal(received.NO_COLOR,'1');
+  for(const key of ['GITHUB_TOKEN','HAK_OBSERVER_TOKEN','HAK_OMNIROUTE_API_KEY','ANTHROPIC_API_KEY'])
+    assert.equal(Object.hasOwn(received,key),false);
+});
