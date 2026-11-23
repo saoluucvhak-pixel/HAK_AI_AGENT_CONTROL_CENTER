@@ -11,6 +11,8 @@ export async function drillObserverRestore({backupPath,sha256}={}){
  try{
   const restored=join(temp,'restored-events.jsonl');
   await copyFile(backupPath,restored);
+  const restoredIntegrity=await verifyObserverBackup({path:restored,expectedSha256:sha256});
+  if(!restoredIntegrity.valid)throw new Error('Restored copy checksum mismatch');
   const store=new EventStore(restored);
   await store.load();
   const events=store.list();
