@@ -91,3 +91,42 @@ async function checkTools(){
  finally{$('check-tools').disabled=false;}
 }
 $('check-tools').addEventListener('click',checkTools);
+
+let operatorToken='';
+async function operatorSession(){
+ try{
+  const r=await fetch('/api/operator/session',{cache:'no-store'});
+  if(!r.ok)throw Error('Session unavailable');
+  const data=await r.json();operatorToken=data.token;
+  $('job-message').textContent=data.enabled?'AI đã bật. Có thể giao việc không nhạy cảm.':'Chưa bật AI. Cần cấu hình OmniRoute và HAK_AGENT_EXECUTION_ENABLED=true trên máy.';
+ }catch{$('job-message').textContent='Không kết nối được phiên điều hành cục bộ';}
+}
+async function refreshJobs(){
+ try{
+  const r=await fetch('/api/operator/jobs',{cache:'no-store'});
+  if(!r.ok)throw Error('Job API unavailable');
+  const data=await r.json();$('operator-jobs').replaceChildren();
+  for(const job of data.jobs){
+   const card=el('article',undefined,'repo');
+   card.append(el('h3',job.title),el('p','Trạng thái: '+job.status+' · ID: '+job.id));
+   if(job.error)card.append(el('p',job.error,'warning'));
+   if(job.status==='completed')card.append(el('p','Kết quả lưu tại data/agent-results/'+job.id+'.txt trên máy chạy HAK.'));
+   $('operator-jobs').append(card);
+  }
+ }catch{$('job-message').textContent='Không tải được công việc';}
+}
+$('agent-job-form').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const button=$('agent-job-form').querySelector('button[type=submit]');
+ button.disabled=true;$('job-message').textContent='Đang gửi công việc…';
+ try{
+  const r=await fetch('/api/operator/jobs',{method:'POST',headers:{'Content-Type':'application/json','X-HAK-Operator-Token':operatorToken},body:JSON.stringify({title:$('job-title').value,description:$('job-description').value,role:$('job-role').value,confirm:$('job-confirm').checked})});
+  const result=await r.json();
+  if(!r.ok)throw Error(result.error||'Request failed');
+  $('job-message').textContent='Đã nhận công việc '+result.id+'. Nhấn Cập nhật công việc để xem kết quả.';
+  await refreshJobs();
+ }catch(error){$('job-message').textContent=error.message}
+ finally{button.disabled=false;}
+});
+$('refresh-jobs').addEventListener('click',refreshJobs);
+operatorSession();refreshJobs();
