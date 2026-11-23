@@ -2,7 +2,8 @@ import {createServer} from 'node:http';
 import {randomBytes} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
-import {snapshots} from './github.js';
+import {snapshots,safeRepo} from './github.js';
+import {githubPrEvidence} from './github-pr-evidence.js';
 import {createObserverApi} from './observer-api.js';
 import {EventStore} from './event-store.js';
 import {topology,toMermaid} from './topology.js';
@@ -28,6 +29,19 @@ export const server=createServer(async(req,res)=>{
    await observer(req,res,path);return;
   }
   if(req.method!=='GET'){res.writeHead(405);res.end('Method Not Allowed');return;}
+  if(path==='/api/github/pr-evidence'){
+   const url=new URL(req.url||'/', 'http://localhost');
+   const repo=url.searchParams.get('repo');
+   const numberText=url.searchParams.get('number');
+   if(!repo||!numberText||!/^[1-9][0-9]{0,8}$/.test(numberText)){
+    res.writeHead(400,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'Invalid repository or PR number'}));return;
+   }
+   try{safeRepo(repo);}catch{
+    res.writeHead(400,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'Repository not allowed'}));return;
+   }
+   const report=await githubPrEvidence(repo,Number(numberText));
+   res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(report));return;
+  }
   if(path==='/api/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,app:'hak-agent-control-center',mode:'read-only',host}));return;}
   if(path==='/api/evidence'){
    const diagnostics=await probeTools();
