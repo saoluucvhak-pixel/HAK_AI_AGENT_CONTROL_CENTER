@@ -38,3 +38,16 @@ test('100 commits are treated as potentially truncated, never all green',async()
  assert.equal(r.evidenceComplete,false);
  assert.equal(r.allChecksPassed,false);
 });
+
+test('pagination includes later failing checks and avoids false green verdict',async()=>{
+ const fetchImpl=async url=>({ok:true,json:async()=>{
+  if(url.includes('/check-runs?'))return {check_runs:url.includes('page=2')?[{name:'late-failure',status:'completed',conclusion:'failure'}]:Array.from({length:100},(_,i)=>({name:'ok-'+i,status:'completed',conclusion:'success'}))};
+  if(url.includes('/commits?'))return [{sha}];
+  return {head:{sha},state:'open',draft:false};
+ }});
+ const r=await githubPrEvidence('HAK_AI_SKILLS',4,{fetchImpl,token:''});
+ assert.equal(r.checkListTruncated,false);
+ assert.equal(r.evidenceComplete,true);
+ assert.equal(r.checks.length,101);
+ assert.equal(r.allChecksPassed,false);
+});
