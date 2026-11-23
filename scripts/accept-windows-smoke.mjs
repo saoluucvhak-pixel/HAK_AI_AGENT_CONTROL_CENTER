@@ -1,4 +1,5 @@
 import {spawn} from 'node:child_process';
+import {createServer} from 'node:net';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -10,7 +11,11 @@ import {resolve} from 'node:path';
 const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const dir=await mkdtemp(join(tmpdir(),'hak-operator-smoke-'));
 const token=randomBytes(32).toString('hex');
-const env={...process.env,NODE_ENV:'production',PORT:'0',HAK_EVENT_STORE_PATH:join(dir,'events.jsonl'),HAK_OBSERVER_TOKEN:token};
+const listener=createServer();
+await new Promise((resolve,reject)=>listener.once('error',reject).listen(0,'127.0.0.1',resolve));
+const selectedPort=listener.address().port;
+await new Promise(resolve=>listener.close(resolve));
+const env={...process.env,NODE_ENV:'production',PORT:String(selectedPort),HAK_EVENT_STORE_PATH:join(dir,'events.jsonl'),HAK_OBSERVER_TOKEN:token};
 const child=spawn(process.execPath,['src/server.js'],{cwd:root,env,stdio:['ignore','pipe','pipe']});
 let output='',error='';
 child.stdout.on('data',x=>{output+=x.toString();output=output.slice(-8192)});
