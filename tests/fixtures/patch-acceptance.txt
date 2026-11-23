@@ -1,2 +1,2 @@
-HAK GitHub Patch Executor isolated acceptance fixture v1
-This file is reserved for controlled draft-PR acceptance tests.
+HAK GitHub Patch Executor isolated acceptance fixture v2
+Verified workflow dispatch: 45109874656
