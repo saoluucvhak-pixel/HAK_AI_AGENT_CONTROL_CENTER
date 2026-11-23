@@ -17,10 +17,10 @@ export function createObserverApi({token,registry=new TaskRegistry(),localReadOn
   if(!(localReadOnly&&path==='/api/agent-status'&&req.method==='GET')&&!authorized(req.headers.authorization,token)){respond(401,{error:'unauthorized'});return true;}
   if(path==='/api/agent-status'&&req.method==='GET'){respond(200,{tasks:registry.summary(),source:registry.persistent?'local-observer-jsonl':'local-observer-memory',persistent:registry.persistent===true});return true;}
   if(path==='/api/agent-events'&&req.method==='POST'){
-   let body='',size=0;
+   const chunks=[];let size=0;
    try{
-    for await(const chunk of req){size+=chunk.length;if(size>8192){respond(413,{error:'payload too large'});return true;}body+=chunk.toString('utf8');}
-    const event=await registry.add(JSON.parse(body));
+    for await(const chunk of req){size+=chunk.length;if(size>8192){respond(413,{error:'payload too large'});return true;}chunks.push(chunk);}
+    const event=await registry.add(JSON.parse(Buffer.concat(chunks,size).toString('utf8')));
     respond(201,event);
    }catch{respond(400,{error:'invalid event'});}
    return true;
