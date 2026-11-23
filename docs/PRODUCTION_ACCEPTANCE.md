@@ -16,6 +16,7 @@ The CI matrix runs on GitHub-hosted Windows Server 2022 and Ubuntu 24.04 with No
 | Tool | Minimum evidence | State |
 | --- | --- | --- |
 | Dashboard/Observer | Windows desktop screenshot, health endpoint, restart replay | CI-only |
+| Orca desktop/mobile | Installed CLI version, local status, mobile pairing and reconnection, authorization audit | Pending |
 | OmniRoute | Version, local endpoint, approved real request, latency/cost | Pending |
 | Ruflo | Version, actual agents and trace of delegated work | Pending |
 | Claude-Mem | Version, scope-isolation and restart retrieval | Pending |
