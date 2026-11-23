@@ -1,0 +1,20 @@
+const OWNER='saoluucvhak-pixel',REPO='HAK_AI_AGENT_CONTROL_CENTER';
+export function classifyPatchPr(pr){
+ const branch=pr?.head?.ref||'';
+ if(!/^hak-fix\/acceptance-[0-9]+$/.test(branch))return null;
+ const runId=Number(branch.slice('hak-fix/acceptance-'.length));
+ return {number:pr.number,title:pr.title,draft:!!pr.draft,state:pr.state,branch,headSha:pr.head.sha,url:pr.html_url,runId,stage:pr.state==='closed'?(pr.merged_at?'merged':'closed'):pr.draft?'review-required':'ready-for-review',nextAction:pr.state==='closed'?'No action':pr.draft?'Review fixture-only diff; do not merge acceptance PR':'Confirm policy and human approval before merge'};
+}
+export function classifyPatchRun(run){
+ const state=run.status!=='completed'?'running':run.conclusion==='success'?'passed':'failed';
+ return {id:run.id,status:state,conclusion:run.conclusion||null,url:run.html_url,sha:run.head_sha,createdAt:run.created_at,nextAction:state==='failed'?'Inspect workflow logs and use recovery for a created branch':state==='running'?'Wait for completion':'Check linked Draft PR and evidence artifact'};
+}
+export async function githubPatchStatus({fetchImpl=fetch,token=process.env.GITHUB_TOKEN}={}){
+ const headers={Accept:'application/vnd.github+json','User-Agent':'HAK-Operations-Dashboard'};
+ if(token)headers.Authorization='Bearer '+token;
+ async function get(path){const r=await fetchImpl('https://api.github.com/repos/'+OWNER+'/'+REPO+path,{headers,redirect:'error',signal:AbortSignal.timeout(10000)});if(!r.ok)throw new Error('GitHub HTTP '+r.status);return r.json();}
+ const [runs,prs]=await Promise.all([get('/actions/workflows/github-patch-live-acceptance.yml/runs?per_page=10'),get('/pulls?state=all&per_page=30')]);
+ const entries=(runs.workflow_runs||[]).filter(r=>r.name==='GitHub Patch Live Acceptance (manual only)'&&r.event==='workflow_dispatch').map(classifyPatchRun);
+ const patches=(Array.isArray(prs)?prs:[]).map(classifyPatchPr).filter(Boolean);
+ return {kind:'hak-github-patch-status',repository:OWNER+'/'+REPO,readOnly:true,updatedAt:new Date().toISOString(),runs:entries,prs:patches,notice:'Acceptance fixture PRs are evidence, not production fixes. No automatic merge.'};
+}
