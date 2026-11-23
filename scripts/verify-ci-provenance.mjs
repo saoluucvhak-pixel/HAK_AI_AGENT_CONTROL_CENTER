@@ -8,7 +8,7 @@ const valid=p?.schemaVersion===1&&p.kind==='hak-github-ci-provenance'&&
  typeof p.repository==='string'&&p.repository.includes('/')&&
  typeof p.nodeVersion==='string'&&p.nodeVersion.startsWith('v22.');
 if(!valid)throw new Error('Invalid GitHub-hosted CI provenance');
-if(p.event==='push'){
+if(p.event==='push'||p.event==='workflow_dispatch'){
  if(process.env.GITHUB_REF!=='refs/heads/main'||process.env.GITHUB_SHA!==p.commitSha)
   throw new Error('Main release gate: unexpected branch or commit');
 }else if(p.event==='pull_request'){
