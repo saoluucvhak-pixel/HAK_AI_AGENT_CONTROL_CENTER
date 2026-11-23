@@ -19,7 +19,7 @@ export function createObserverApi({token,registry=new TaskRegistry(),localReadOn
   if(path==='/api/agent-events'&&req.method==='POST'){
    const chunks=[];let size=0;
    try{
-    for await(const chunk of req){size+=chunk.length;if(size>8192){respond(413,{error:'payload too large'});return true;}chunks.push(chunk);}
+    for await(const chunk of req){const bytes=Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk,'utf8');size+=bytes.length;if(size>8192){respond(413,{error:'payload too large'});return true;}chunks.push(bytes);}
     const event=await registry.add(JSON.parse(Buffer.concat(chunks,size).toString('utf8')));
     respond(201,event);
    }catch{respond(400,{error:'invalid event'});}
