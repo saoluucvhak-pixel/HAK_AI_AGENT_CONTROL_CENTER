@@ -2,12 +2,12 @@ import {mkdir,readFile,open} from 'node:fs/promises';
 import {dirname,resolve} from 'node:path';
 import {validateEvent} from './core.js';
 export class EventStore {
- #path; #events=[]; #tail=Promise.resolve();
+ #path; #events=[]; #latest=new Map(); #tail=Promise.resolve();
  constructor(path){if(typeof path!=='string'||!path.trim())throw new Error('Event store path required');this.#path=resolve(path);}
  async load(){
   await this.#tail;
   let content;
-  try{content=await readFile(this.#path,'utf8')}catch(e){if(e.code==='ENOENT'){this.#events=[];return;}throw e}
+  try{content=await readFile(this.#path,'utf8')}catch(e){if(e.code==='ENOENT'){this.#events=[];this.#latest=new Map();return;}throw e}
   const parsed=[];
   for(const [i,line] of content.split('\n').entries()){
    if(!line.trim())continue;
@@ -17,6 +17,7 @@ export class EventStore {
    parsed.push({taskId:item.taskId,agentId:item.agentId,status:item.status,at:item.at});
   }
   this.#events=parsed;
+  this.#latest=new Map();for(const event of parsed)this.#latest.set(event.taskId,event);
  }
  async add(event){
   const normalized=validateEvent(event);
@@ -25,12 +26,13 @@ export class EventStore {
    const file=await open(this.#path,'a',0o600);
    try{await file.writeFile(JSON.stringify(normalized)+'\n');await file.sync()}finally{await file.close()}
    this.#events.push(normalized);
+   this.#latest.set(normalized.taskId,normalized);
    return normalized;
   };
   const pending=this.#tail.then(write);this.#tail=pending.then(()=>undefined,()=>undefined);
   return pending;
  }
  get persistent(){return true;}
- summary(){const latest=new Map();for(const e of this.#events)latest.set(e.taskId,e);return [...latest.values()].map(e=>({...e}));}
+ summary(){return [...this.#latest.values()].map(e=>({...e}));}
  list(){return this.#events.map(e=>({...e}));}
 }
