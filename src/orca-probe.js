@@ -6,7 +6,7 @@ export function probeOrca({enabled=false,run=spawnSync}={}) {
   try {
     result=run('orca',['status','--json'],{
       encoding:'utf8',timeout:5000,maxBuffer:65536,
-      windowsHide:true,shell:false,env:{...process.env,NO_COLOR:'1'}
+      windowsHide:true,shell:false,env:safeCliEnv(env)
     });
   } catch {
     return {status:'unavailable',connected:false};
