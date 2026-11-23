@@ -25,3 +25,27 @@ test('real HTTP dashboard health endpoint and response headers',async()=>{
     await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
   }
 });
+
+test('real HTTP server rejects unauthorized event writes and unsupported methods',async()=>{
+  server.listen(0,'127.0.0.1');
+  try{
+    await once(server,'listening');
+    const address=server.address();
+    assert.ok(address && typeof address!=='string');
+    const base='http://127.0.0.1:'+address.port;
+    const unauthorized=await fetch(base+'/api/agent-events',{
+      method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({taskId:'ci-test',agentId:'ci',status:'passed'}),
+      signal:AbortSignal.timeout(5000)
+    });
+    assert.equal(unauthorized.status,401);
+    assert.deepEqual(await unauthorized.json(),{error:'unauthorized'});
+    const method=await fetch(base+'/api/health',{method:'POST',signal:AbortSignal.timeout(5000)});
+    assert.equal(method.status,405);
+    assert.equal(await method.text(),'Method Not Allowed');
+    const unknown=await fetch(base+'/does-not-exist',{signal:AbortSignal.timeout(5000)});
+    assert.equal(unknown.status,404);
+  }finally{
+    await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
+  }
+});
