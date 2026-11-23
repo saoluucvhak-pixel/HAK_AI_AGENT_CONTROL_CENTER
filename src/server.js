@@ -1,4 +1,5 @@
 import {createServer} from 'node:http';
+import {githubPatchStatus} from './github-patch-status.js';
 import {randomBytes} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
@@ -70,6 +71,10 @@ export const server=createServer(async(req,res)=>{
     res.writeHead(400,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'Repository not allowed'}));return;
    }
    const report=await githubCiInvestigation(repo,Number(runText));
+   res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(report));return;
+  }
+  if(path==='/api/github/patch-status'){
+   const report=await githubPatchStatus();
    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(report));return;
   }
   if(path==='/api/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,app:'hak-agent-control-center',mode:'read-only',host}));return;}
