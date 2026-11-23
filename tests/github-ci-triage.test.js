@@ -11,3 +11,5 @@ test('only failed jobs are fetched',async()=>{
  assert.equal(urls.length,2);assert.equal(r.reports[0].classification,'syntax-error');assert.equal(r.readyToMerge,false);
 });
 test('unknown repository blocked',async()=>{await assert.rejects(()=>githubFailedJobTriage('wrong',1),/allowlisted/)});
+
+test('file hints do not leak raw CI log text or token',()=>{const x=triageGithubJobLog('secret=ghp_fake123 Error in tests/example.test.js Authorization: Bearer secret');assert.deepEqual(x.fileHints,['tests/example.test.js']);assert.ok(!JSON.stringify(x).includes('ghp_fake123'))});
