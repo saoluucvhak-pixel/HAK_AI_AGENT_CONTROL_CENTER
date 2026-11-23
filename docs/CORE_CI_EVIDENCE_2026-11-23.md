@@ -15,6 +15,10 @@ This is a **CI-only technical evidence record**, not production approval or an a
 | #87 | [45134175291](https://github.com/saoluucvhak-pixel/HAK_AI_AGENT_CONTROL_CENTER/actions/runs/45134175291) | Windows/Ubuntu passed | Real loopback HTTP health smoke test |
 | #88 | [45138011561](https://github.com/saoluucvhak-pixel/HAK_AI_AGENT_CONTROL_CENTER/actions/runs/45138011561) | Windows/Ubuntu passed | HTTP authorization and method restrictions |
 | #89 | [45139096095](https://github.com/saoluucvhak-pixel/HAK_AI_AGENT_CONTROL_CENTER/actions/runs/45139096095) | Windows/Ubuntu passed | Observer status read-only behavior |
+| #90 | [45139890369](https://github.com/saoluucvhak-pixel/HAK_AI_AGENT_CONTROL_CENTER/actions/runs/45139890369) | Windows/Ubuntu passed | Scoped acceptance evidence ledger |
+| #91 | [45145532679](https://github.com/saoluucvhak-pixel/HAK_AI_AGENT_CONTROL_CENTER/actions/runs/45145532679) | Windows/Ubuntu passed | Exact SHA and runner provenance in artifacts |
+
+Starting with PR #91, each OS artifact also contains `ci-provenance.json` identifying the exact `GITHUB_SHA`, run ID, event and runner. This is GitHub-provided metadata, not an independent cryptographic signature.
 
 These are **PR-head CI runs**, not independently verified push-to-main runs. The diagnostic packets explicitly set `readyForProduction:false` and do not attest real provider execution. CI artifacts are retained for 30 days, so preserve approved evidence elsewhere if needed for longer audit retention.
 
