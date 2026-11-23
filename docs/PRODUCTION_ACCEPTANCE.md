@@ -15,7 +15,7 @@ The CI matrix runs on GitHub-hosted Windows Server 2022 and Ubuntu 24.04 with No
 ## Evidence and sign-off
 | Tool | Minimum evidence | State |
 | --- | --- | --- |
-| Dashboard/Observer | Windows desktop screenshot, health endpoint, restart replay | CI-only |
+| Dashboard/Observer | Windows 11 local one-click acceptance screenshot (2026-11-23), isolated HTTP health, event persistence and restart replay; CI Windows/Ubuntu | Isolated desktop baseline passed; live store not verified |
 | Orca desktop/mobile | Installed CLI version, local status, mobile pairing and reconnection, authorization audit | Pending |
 | OmniRoute | Version, local endpoint, approved real request, latency/cost | Pending |
 | Ruflo | Version, actual agents and trace of delegated work | Pending |
@@ -49,3 +49,9 @@ On Windows, double-click `HAK_EXPORT_ACCEPTANCE_WINDOWS.cmd`, or run `npm run ac
 
 ## One-click local evidence export and integrity check
 On the operator's Windows computer, after updating `main`, double-click `HAK_EXPORT_ACCEPTANCE_WINDOWS.cmd`. It runs the local baseline, writes a new private JSON packet under `%LOCALAPPDATA%\\HAK\\acceptance`, then reads the saved file and checks its SHA-256 digest before reporting success. It never uploads the packet or calls paid providers. You can independently recheck a saved file with `npm run accept:verify -- "<local-packet.json>"`. A successful digest check confirms consistency only: it does not prove origin, provider execution, security approval or production readiness. Do not share private paths, credentials or raw traces in GitHub issues. Real provider evidence and human approval remain required in Issue #32.
+
+## Windows 11 operator evidence — 2026-11-23
+
+The operator ran `HAK_AUTO_ACCEPT_WINDOWS.cmd` on an HP ProBook running Windows 11. The displayed result was `passed:true` and `PASS: Local isolated acceptance checks completed`, with Node 22+, isolated Dashboard health, unauthorized write rejection, authenticated Observer event write, JSONL persistence, restart replay, SHA256 backup verification, and restore drill passing. The output explicitly reported `isolated:true`, `liveStoreModified:false`, `externalAgentsVerified:false`, and `readyForProduction:false`. This is operator-reported screenshot evidence; the image is not committed to the repository. The later simulated agent lifecycle checks introduced in PR #108 were verified in CI, but have not yet been separately re-run on this workstation.
+
+For current releases, double-click `HAK_AUTO_ACCEPT_WINDOWS.cmd`. The script uses an isolated temporary store and port, saves a readable `HAK_ACCEPTANCE_RESULT.txt` beside the launcher, and does not require manual PowerShell commands or credentials. Do not treat the report as proof of external AI provider execution or production approval. Retain external provider trace, independent review, and real-data recovery approval as separate gates.
