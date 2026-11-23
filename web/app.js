@@ -90,3 +90,28 @@ async function checkTools(){
  finally{$('check-tools').disabled=false;}
 }
 $('check-tools').addEventListener('click',checkTools);
+
+async function loadPatches(){
+ $('patch-status').textContent='Đang đọc trạng thái bản vá…';
+ $('refresh-patches').disabled=true;
+ try{
+  const response=await fetch('/api/github/patch-status',{cache:'no-store'});
+  if(!response.ok)throw new Error('HTTP '+response.status);
+  const report=await response.json();
+  $('patches').replaceChildren();
+  for(const run of report.runs||[]){
+   const card=el('article',undefined,'repo');
+   card.append(el('h3','Workflow #'+run.id),el('p','Trạng thái: '+run.status+' · '+(run.conclusion||'chưa kết luận')),el('p',run.nextAction));
+   addLink(card,run.url,'Xem workflow');$('patches').append(card);
+  }
+  for(const pr of report.prs||[]){
+   const card=el('article',undefined,'repo');
+   card.append(el('h3','PR #'+pr.number+' · '+pr.stage),el('p',pr.branch),el('p',pr.nextAction));
+   addLink(card,pr.url,'Xem Pull Request');$('patches').append(card);
+  }
+  $('patch-status').textContent=(report.runs||[]).length+' workflow · '+(report.prs||[]).length+' PR · Chỉ đọc';
+ }catch(error){$('patch-status').textContent='Không tải được trạng thái bản vá: '+error.message;}
+ finally{$('refresh-patches').disabled=false;}
+}
+$('refresh-patches').addEventListener('click',loadPatches);
+loadPatches();
