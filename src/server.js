@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {snapshots,safeRepo} from './github.js';
 import {githubPrEvidence} from './github-pr-evidence.js';
 import {assessGithubPrEvidence} from './github-pr-assessment.js';
+import {githubFailedJobTriage} from './github-ci-triage.js';
 import {createObserverApi} from './observer-api.js';
 import {EventStore} from './event-store.js';
 import {topology,toMermaid} from './topology.js';
@@ -42,6 +43,19 @@ export const server=createServer(async(req,res)=>{
    }
    const report=await githubPrEvidence(repo,Number(numberText));
    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({...report,assessment:assessGithubPrEvidence(report)}));return;
+  }
+  if(path==='/api/github/ci-triage'){
+   const url=new URL(req.url||'/', 'http://localhost');
+   const repo=url.searchParams.get('repo');
+   const runText=url.searchParams.get('run');
+   if(!repo||!runText||!/^[1-9][0-9]{0,14}$/.test(runText)||!Number.isSafeInteger(Number(runText))){
+    res.writeHead(400,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'Invalid repository or run ID'}));return;
+   }
+   try{safeRepo(repo);}catch{
+    res.writeHead(400,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'Repository not allowed'}));return;
+   }
+   const report=await githubFailedJobTriage(repo,Number(runText));
+   res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(report));return;
   }
   if(path==='/api/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,app:'hak-agent-control-center',mode:'read-only',host}));return;}
   if(path==='/api/evidence'){
