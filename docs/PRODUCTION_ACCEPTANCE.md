@@ -42,3 +42,6 @@ On an operator-approved Windows computer, from the checked-out repository root r
 
 ## Sanitized acceptance packet for Issue #32
 Run `npm run accept:packet` on the approved Windows workstation. The command performs the same local syntax/unit/connectivity checks and prints a structured, sanitized packet with the seven remaining independent acceptance gates marked `missing`. Copy the output to a private review channel if needed. The SHA-256 is an integrity identifier, not a digital signature or evidence of execution. Provider traces and reviewer sign-off must be collected separately; this command cannot mark any gate `passed` and always returns `readyForProduction:false`.
+
+## Save a local acceptance packet without copying console output
+On Windows, double-click `HAK_EXPORT_ACCEPTANCE_WINDOWS.cmd`, or run `npm run accept:export`. A sanitized JSON report is written to `%LOCALAPPDATA%\\HAK\\acceptance` (or the user's local AppData folder fallback). Existing files are never overwritten. Review the file before sharing it; connectivity does not prove actual Ruflo or Claude-Mem execution. The file contains diagnostic status and local platform metadata, not provider credentials or child command output. Keep full provider traces separately in a protected location.
