@@ -17,6 +17,8 @@ export async function executeGithubPatchProposal(proposal,{branch,authorized=fal
   if(!r.ok){if(r.status===409||r.status===422)throw new Error('GitHub conflict; branch or file changed');throw new Error('GitHub HTTP '+r.status);}
   return r.json();
  }
+ const target=await request('');
+ if(target?.full_name!==OWNER+'/'+p.repository||target?.default_branch!=='main'||target?.archived===true||target?.disabled===true)throw new Error('Repository identity, default branch or writable state mismatch; patch blocked');
  const base=await request('/git/ref/heads/main');
  if(!SHA.test(base?.object?.sha||'')||base.object.sha!==p.baseSha)throw new Error('Default branch advanced; refresh proposal');
  // Re-read every file immediately before preparing the tree.
