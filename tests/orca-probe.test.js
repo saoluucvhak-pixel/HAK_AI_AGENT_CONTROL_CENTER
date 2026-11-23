@@ -30,7 +30,7 @@ test('Orca CLI subprocess receives only required OS variables, not HAK credentia
     PATH:'/usr/bin',HOME:'/home/operator',SystemRoot:'C:\\Windows',
     GITHUB_TOKEN:'secret-github',HAK_OBSERVER_TOKEN:'secret-observer',
     HAK_OMNIROUTE_API_KEY:'secret-provider',ANTHROPIC_API_KEY:'secret-model'
-  },run:(_cmd,_args,opts)=>{received=opts.env;return {status:0,stdout:'{"ok":true}'};}});
+  },run:(_cmd,_args,opts)=>{received=opts.env;return {status:0,stdout:'{"connected":true}'};}});
   assert.equal(result.connected,true);
   assert.equal(received.PATH,'/usr/bin');
   assert.equal(received.HOME,'/home/operator');
@@ -38,4 +38,12 @@ test('Orca CLI subprocess receives only required OS variables, not HAK credentia
   assert.equal(received.NO_COLOR,'1');
   for(const key of ['GITHUB_TOKEN','HAK_OBSERVER_TOKEN','HAK_OMNIROUTE_API_KEY','ANTHROPIC_API_KEY'])
     assert.equal(Object.hasOwn(received,key),false);
+});
+
+test('Orca probe does not treat arbitrary JSON or explicit disconnected state as connectivity',()=>{
+ for(const output of ['{}','{"ok":true}','{"connected":false}','{"ready":false}','{"connected":true,"ready":false}']){
+  const result=probeOrca({enabled:true,run:()=>({status:0,stdout:output})});
+  assert.equal(result.connected,false);
+ }
+ assert.deepEqual(probeOrca({enabled:true,run:()=>({status:0,stdout:'{"connected":true}'})}),{status:'reachable',connected:true});
 });
