@@ -21,7 +21,7 @@ else {
   const recovery=await githubPatchRecovery(proposal.repository,branch,result.commitSha);
   if(!recovery.matchingCommit||!recovery.prFound||recovery.prNumber!==result.prNumber||recovery.prState!=='open')throw new Error('GitHub post-write verification failed');
   const evidence={status:'verified',verifiedAt:new Date().toISOString(),ciRunId:proposal.runId,baseSha:proposal.baseSha,...result,recovery};
-  if(process.env.HAK_PATCH_EVIDENCE_FILE)await writeFile(process.env.HAK_PATCH_EVIDENCE_FILE,JSON.stringify(evidence,null,2)+'\\n',{flag:'wx',mode:0o600});
+  if(process.env.HAK_PATCH_EVIDENCE_FILE)await writeFile(process.env.HAK_PATCH_EVIDENCE_FILE,JSON.stringify(evidence,null,2)+'\n',{flag:'wx',mode:0o600});
   console.log(JSON.stringify(evidence,null,2));
  }catch(error){console.error('Acceptance failed:',error.message);process.exitCode=1;}
 }
