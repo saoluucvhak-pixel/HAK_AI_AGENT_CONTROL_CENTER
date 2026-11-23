@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import {executeGithubPatchProposal} from '../src/github-patch-executor.js';
 const sha='a'.repeat(40),blob='b'.repeat(40),treeSha='c'.repeat(40),commitSha='d'.repeat(40);
 const proposal={repository:'HAK_AI_SKILLS',runId:7,baseSha:sha,rationale:'Fix failing deterministic CI test',changes:[{path:'tests/example.test.js',expectedBlobSha:blob,newContent:'assert.ok(true);'},{path:'src/example.js',expectedBlobSha:blob,newContent:'export const ok = true;'}]};
-function fake({mainSha=sha,fileSha=blob,prFails=false,repoName='saoluucvhak-pixel/HAK_AI_SKILLS',defaultBranch='main',archived=false,fileMode='100644',truncated=false}={}){
+function fake({mainSha=sha,fileSha=blob,prFails=false,repoName='saoluucvhak-pixel/HAK_AI_SKILLS',defaultBranch='main',archived=false,fileMode='100644',truncated=false,runConclusion='success'}={}){
  const calls=[];
  const fetchImpl=async(url,opts={})=>{
   const method=opts.method||'GET';const body=opts.body?JSON.parse(opts.body):null;calls.push({url,method,body});
   if(prFails&&url.endsWith('/pulls'))return {ok:false,status:422};
   let data;
-  if(url.includes('/actions/runs/7'))data={id:7,head_sha:sha};
+  if(url.includes('/actions/runs/7'))data={id:7,head_sha:sha,status:'completed',conclusion:runConclusion};
   else if(url.endsWith('/HAK_AI_SKILLS'))data={full_name:repoName,default_branch:defaultBranch,archived};
   else if(url.includes('/git/ref/heads/main'))data={object:{sha:mainSha}};
   else if(url.includes('/git/ref/heads/hak-fix/'))data={object:{sha:commitSha}};
@@ -104,4 +104,10 @@ test('main advances after fix branch publication: no draft PR is created',async(
  await assert.rejects(()=>executeGithubPatchProposal(proposal,{branch:'hak-fix/test',authorized:true,token:'fake',fetchImpl}),/advanced after fix branch publication/);
  assert.equal(x.calls.some(c=>c.url.endsWith('/git/refs')&&c.method==='POST'),true);
  assert.equal(x.calls.some(c=>c.url.endsWith('/pulls')),false);
+});
+
+test('executor performs zero GitHub writes when CI failed despite matching SHA',async()=>{
+ const x=fake({runConclusion:'failure'});
+ await assert.rejects(()=>executeGithubPatchProposal(proposal,{branch:'hak-fix/test',authorized:true,token:'fake',fetchImpl:x.fetchImpl}),/not completed successfully/);
+ assert.equal(x.calls.some(c=>c.method!=='GET'),false);
 });
