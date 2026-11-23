@@ -4,3 +4,4 @@ data/
 node_modules/
 *.log
 HAK_ACCEPTANCE_RESULT.txt
+HAK_AGENT_READINESS_RESULT.txt
