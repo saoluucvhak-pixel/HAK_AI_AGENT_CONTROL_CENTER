@@ -20,13 +20,24 @@ test('GitHub 403 propagates as error',async()=>{
  await assert.rejects(()=>githubPrEvidence('HAK_AI_SKILLS',4,{fetchImpl:async()=>({ok:false,status:403})}),/403/);
 });
 
-test('fails closed when check-run total exceeds returned page',async()=>{
- const fetchImpl=async url=>({ok:true,json:async()=>url.includes('/commits?')?[{sha}]:url.includes('/check-runs?')?{total_count:101,check_runs:[{name:'CI',status:'completed',conclusion:'success'}]}:{head:{sha},state:'open',draft:false}});
+
+test('paginates check runs and accepts complete evidence',async()=>{
+ const fetchImpl=async url=>({ok:true,json:async()=>url.includes('/commits?')?[{sha}]:url.includes('/check-runs?')?{total_count:2,check_runs:url.includes('page=2')?[{id:2,name:'Windows',status:'completed',conclusion:'success'}]:[{id:1,name:'Ubuntu',status:'completed',conclusion:'success'}]}:{head:{sha},state:'open',draft:false}});
+ const result=await githubPrEvidence('HAK_AI_SKILLS',4,{fetchImpl,token:''});
+ assert.equal(result.evidenceComplete,true);assert.equal(result.checks.length,2);assert.equal(result.allChecksPassed,true);
+});
+test('fails closed on duplicate or incomplete check pages',async()=>{
+ const fetchImpl=async url=>({ok:true,json:async()=>url.includes('/commits?')?[{sha}]:url.includes('/check-runs?')?{total_count:101,check_runs:[{id:1,name:'CI',status:'completed',conclusion:'success'}]}:{head:{sha},state:'open',draft:false}});
  const result=await githubPrEvidence('HAK_AI_SKILLS',4,{fetchImpl,token:''});
  assert.equal(result.evidenceComplete,false);assert.equal(result.checkListTruncated,true);assert.equal(result.allChecksPassed,false);
 });
-test('fails closed when commit page may be truncated',async()=>{
- const fetchImpl=async url=>({ok:true,json:async()=>url.includes('/commits?')?Array.from({length:100},()=>({sha})):url.includes('/check-runs?')?{total_count:1,check_runs:[{name:'CI',status:'completed',conclusion:'success'}]}:{head:{sha},state:'open',draft:false}});
+test('paginates 100 commits and detects duplicate evidence',async()=>{
+ const fetchImpl=async url=>({ok:true,json:async()=>url.includes('/commits?')?(url.includes('page=2')?[{sha}]:Array.from({length:100},(_,i)=>({sha:String(i)}))):url.includes('/check-runs?')?{total_count:1,check_runs:[{id:1,name:'CI',status:'completed',conclusion:'success'}]}:{head:{sha},state:'open',draft:false}});
+ const result=await githubPrEvidence('HAK_AI_SKILLS',4,{fetchImpl,token:''});
+ assert.equal(result.commitCountObserved,101);assert.equal(result.commitListTruncated,false);assert.equal(result.evidenceComplete,true);
+});
+test('fails closed if commit pagination repeats rows',async()=>{
+ const fetchImpl=async url=>({ok:true,json:async()=>url.includes('/commits?')?Array.from({length:100},(_,i)=>({sha:String(i)})):url.includes('/check-runs?')?{total_count:1,check_runs:[{id:1,name:'CI',status:'completed',conclusion:'success'}]}:{head:{sha},state:'open',draft:false}});
  const result=await githubPrEvidence('HAK_AI_SKILLS',4,{fetchImpl,token:''});
  assert.equal(result.commitListTruncated,true);assert.equal(result.allChecksPassed,false);
 });
