@@ -1,6 +1,6 @@
 import {createServer} from 'node:http';
 import {randomBytes,timingSafeEqual} from 'node:crypto';
-import {mkdir,writeFile} from 'node:fs/promises';
+import {mkdir,writeFile,rename,readdir} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {executeApprovedWorkOrder} from './agent-engine.js';
 import {readFile} from 'node:fs/promises';
@@ -30,6 +30,23 @@ const operatorToken=randomBytes(32).toString('hex');
 const jobs=new Map();
 let activeJob=false;
 const jobDir=resolve(process.env.HAK_AGENT_OUTPUT_DIR||'./data/agent-results');
+async function persistJob(job){
+ await mkdir(jobDir,{recursive:true,mode:0o700});
+ const path=join(jobDir,job.id+'.json'),tmp=path+'.'+randomBytes(6).toString('hex')+'.tmp';
+ await writeFile(tmp,JSON.stringify(job),{flag:'wx',mode:0o600});
+ await rename(tmp,path);
+}
+try{
+ await mkdir(jobDir,{recursive:true,mode:0o700});
+ for(const name of (await readdir(jobDir)).filter(n=>/^[a-f0-9]{24}\.json$/.test(n)).slice(0,500)){
+  try{
+   const job=JSON.parse(await readFile(join(jobDir,name),'utf8'));
+   if(job.id+'.json'!==name||typeof job.title!=='string'||!['running','completed','failed','blocked'].includes(job.status))continue;
+   if(job.status==='running'){job.status='blocked';job.error='Interrupted by application restart';await persistJob(job);}
+   jobs.set(job.id,job);
+  }catch{/* Skip invalid history files */}
+ }
+}catch{/* Storage errors surface on job submission */}
 function sendJson(res,status,body){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(body));}
 function authorized(req){
  const candidate=req.headers['x-hak-operator-token'];
@@ -59,6 +76,18 @@ export const server=createServer(async(req,res)=>{
   if(path==='/api/operator/jobs'&&req.method==='GET'){
    sendJson(res,200,{jobs:[...jobs.values()].map(({id,title,status,steps,error})=>({id,title,status,steps,error}))});return;
   }
+  if(path.startsWith('/api/operator/results/')&&req.method==='GET'){
+   if(!authorized(req)){sendJson(res,403,{error:'Local operator session required'});return;}
+   const id=path.slice('/api/operator/results/'.length);
+   const job=jobs.get(id);
+   if(!/^[a-f0-9]{24}$/.test(id)||!job||job.status!=='completed'){sendJson(res,404,{error:'Result unavailable'});return;}
+   try{
+    const content=await readFile(join(jobDir,id+'.txt'),'utf8');
+    if(content.length>128000)throw Error('Result exceeds limit');
+    sendJson(res,200,{id,title:job.title,content,notice:'AI-generated draft; human review required'});
+   }catch{sendJson(res,404,{error:'Result unavailable'});}
+   return;
+  }
   if(path==='/api/operator/jobs'&&req.method==='POST'){
    const origin=req.headers.origin;
    const expected='http://127.0.0.1:'+port;
@@ -76,6 +105,7 @@ export const server=createServer(async(req,res)=>{
    }catch{sendJson(res,400,{error:'Invalid task or missing confirmation'});return;}
    const id=randomBytes(12).toString('hex');
    const job={id,title:body.title.trim(),status:'running',steps:[],error:null};
+   try{await persistJob(job)}catch{sendJson(res,503,{error:'Local job storage unavailable'});return;}
    jobs.set(id,job);activeJob=true;
    sendJson(res,202,{id,status:'running'});
    void (async()=>{
@@ -94,7 +124,7 @@ export const server=createServer(async(req,res)=>{
      });
      job.steps=result.steps;job.status=result.completed?'completed':'failed';
     }catch{job.status='failed';job.error='Execution failed; check local configuration privately';}
-    finally{activeJob=false;}
+    finally{try{await persistJob(job)}catch{job.error='Failed to save job history';job.status='failed';}activeJob=false;}
    })();
    return;
   }
