@@ -17,6 +17,10 @@ export async function githubPrEvidence(name,number,{fetchImpl=fetch,token=proces
  const [checks,commits]=await Promise.all([read('/commits/'+sha+'/check-runs?per_page=100'),read('/pulls/'+number+'/commits?per_page=100')]);
  if(!Array.isArray(checks.check_runs)||!Array.isArray(commits))throw new Error('Invalid GitHub evidence');
  const jobs=checks.check_runs.map(c=>({name:String(c.name||'').slice(0,100),status:c.status,conclusion:c.conclusion,runId:c.check_suite?.id??null}));
- const allGreen=jobs.length>0&&jobs.every(j=>j.status==='completed'&&j.conclusion==='success');
- return {schemaVersion:1,kind:'hak-github-pr-ci-evidence',repository:name,prNumber:number,headSha:sha,prState:pr.state,draft:pr.draft===true,commitCountObserved:commits.length,commitListTruncated:commits.length===100,checks:jobs,allChecksPassed:allGreen,source:'github-api',codeReviewed:false,agentExecutionVerified:false,readyToMerge:false,notice:'Check-runs are GitHub-reported status only; independent code review and approval remain required.'};
+ const checkListTruncated=jobs.length===100;
+ const commitListTruncated=commits.length===100;
+ // GitHub paginates these endpoints. A first page of 100 is not proof that all checks passed.
+ const evidenceComplete=!checkListTruncated&&!commitListTruncated;
+ const allGreen=evidenceComplete&&jobs.length>0&&jobs.every(j=>j.status==='completed'&&j.conclusion==='success');
+ return {schemaVersion:1,kind:'hak-github-pr-ci-evidence',repository:name,prNumber:number,headSha:sha,prState:pr.state,draft:pr.draft===true,commitCountObserved:commits.length,commitListTruncated,checkListTruncated,evidenceComplete,checks:jobs,allChecksPassed:allGreen,source:'github-api',codeReviewed:false,agentExecutionVerified:false,readyToMerge:false,notice:'Check-runs are GitHub-reported status only; independent code review and approval remain required.'};
 }
