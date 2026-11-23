@@ -24,7 +24,7 @@ function fake({mainSha=sha,fileSha=blob,prFails=false}={}){
 }
 test('publishes two file changes in one atomic commit and opens draft PR',async()=>{
  const x=fake();const r=await executeGithubPatchProposal(proposal,{branch:'hak-fix/test',authorized:true,token:'fake',fetchImpl:x.fetchImpl});
- assert.equal(r.changedFiles.length,2);assert.equal(r.draft,true);assert.deepEqual(x.calls.filter(c=>c.method!=='GET').map(c=>c.url.split('/').slice(-2).join('/')),['git/trees','git/commits','git/refs','hak-fix/test'].map((v,i)=>i===3?'pulls':v));
+ assert.equal(r.changedFiles.length,2);assert.equal(r.draft,true);assert.deepEqual(x.calls.filter(c=>c.method!=='GET').map(c=>new URL(c.url).pathname.split('/').slice(-1)[0]),['trees','commits','refs','pulls']);
  const tree=x.calls.find(c=>c.url.endsWith('/git/trees'));assert.equal(tree.body.tree.length,2);assert.equal(x.calls.filter(c=>c.method==='PUT').length,0);
 });
 test('requires authorization before network',async()=>{const x=fake();await assert.rejects(()=>executeGithubPatchProposal(proposal,{branch:'hak-fix/test',token:'fake',fetchImpl:x.fetchImpl}),/authorization/);assert.equal(x.calls.length,0)});
