@@ -110,7 +110,21 @@ async function refreshJobs(){
    const card=el('article',undefined,'repo');
    card.append(el('h3',job.title),el('p','Trạng thái: '+job.status+' · ID: '+job.id));
    if(job.error)card.append(el('p',job.error,'warning'));
-   if(job.status==='completed')card.append(el('p','Kết quả lưu tại data/agent-results/'+job.id+'.txt trên máy chạy HAK.'));
+   if(job.status==='completed'){
+    const view=el('button','Xem kết quả AI');
+    view.type='button';
+    const output=el('pre','');
+    output.hidden=true;
+    output.style.whiteSpace='pre-wrap';output.style.overflowWrap='anywhere';
+    view.addEventListener('click',async()=>{
+     try{
+      const r=await fetch('/api/operator/results/'+encodeURIComponent(job.id),{headers:{'X-HAK-Operator-Token':operatorToken}});
+      if(!r.ok)throw Error('Không đọc được kết quả');
+      const data=await r.json();output.textContent=data.content;output.hidden=false;
+     }catch(e){output.textContent=e.message;output.hidden=false;}
+    });
+    card.append(view,output);
+   }
    $('operator-jobs').append(card);
   }
  }catch{$('job-message').textContent='Không tải được công việc';}
