@@ -29,3 +29,17 @@ test('status exposes completeness when PR list fits first page',async()=>{
  const result=await githubPatchStatus({fetchImpl,token:''});
  assert.equal(result.complete,true);assert.equal(result.readOnly,true);
 });
+
+test('paginates 100 PRs and includes patch on next page',async()=>{
+ const first=Array.from({length:100},(_,i)=>({number:i+1,state:'closed',draft:false,head:{ref:'feature/unrelated'}}));
+ const second=[{number:101,title:'patch',state:'open',draft:true,head:{ref:'hak-fix/production-fix',sha:'a'.repeat(40)}}];
+ const urls=[];
+ const fetchImpl=async url=>{urls.push(url);return {ok:true,json:async()=>url.includes('/runs?')?{workflow_runs:[]}:url.includes('page=2')?second:first}};
+ const result=await githubPatchStatus({fetchImpl,token:''});
+ assert.equal(result.complete,true);assert.equal(result.prs.length,1);assert.equal(result.prs[0].number,101);
+ assert.equal(urls.length,3);
+});
+test('fails closed on invalid GitHub response',async()=>{
+ const fetchImpl=async url=>({ok:true,json:async()=>url.includes('/runs?')?{}:[]});
+ await assert.rejects(()=>githubPatchStatus({fetchImpl,token:''}),/Invalid GitHub/);
+});
