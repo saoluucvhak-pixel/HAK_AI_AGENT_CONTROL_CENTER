@@ -1,0 +1,2 @@
+HAK GitHub Patch Executor isolated acceptance fixture v1
+This file is reserved for controlled draft-PR acceptance tests.
