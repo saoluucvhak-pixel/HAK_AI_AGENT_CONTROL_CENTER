@@ -13,4 +13,5 @@ test('malformed request URL is handled without unhandled rejection',async()=>{
   assert.equal(headers['Cache-Control'],'no-store');
   assert.equal(headers['X-Content-Type-Options'],'nosniff');
   assert.match(headers['Content-Security-Policy'],/default-src 'none'/);
+  assert.equal(typeof body,'string');
 });
