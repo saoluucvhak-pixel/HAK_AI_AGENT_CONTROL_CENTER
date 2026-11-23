@@ -21,6 +21,7 @@
     "accept:export": "node scripts/export-acceptance.mjs",
     "accept:verify": "node scripts/verify-acceptance-packet.mjs",
     "accept:orca": "node scripts/accept-orca.mjs",
-    "accept:observer-backup": "node scripts/accept-observer-backup.mjs"
+    "accept:observer-backup": "node scripts/accept-observer-backup.mjs",
+    "accept:auto": "node scripts/auto-accept-windows.mjs"
   }
 }
