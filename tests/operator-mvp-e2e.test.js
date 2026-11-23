@@ -41,7 +41,7 @@ test('operator task: real HTTP model gateway contract, result viewing, restart p
   const env={...process.env,PORT:String(port),HAK_AGENT_OUTPUT_DIR:join(dir,'results'),
    HAK_EVENT_STORE_PATH:join(dir,'events.jsonl'),HAK_AGENT_EXECUTION_ENABLED:'true',
    HAK_OMNIROUTE_ENABLED:'true',HAK_OMNIROUTE_URL:'http://127.0.0.1:'+gatewayPort,
-   HAK_OMNIROUTE_API_KEY:'local-test-key-1234567890',HAK_OMNIROUTE_MODEL:'test-model',NODE_ENV:'test'};
+   HAK_OMNIROUTE_API_KEY:'local-test-key-1234567890',HAK_OMNIROUTE_MODEL:'test-model',NODE_ENV:'production'};
   const launch=()=>{
    const processHandle=spawn(process.execPath,['src/server.js'],{cwd:root,env,stdio:['ignore','ignore','pipe']});
    processHandle.hakStderr='';
