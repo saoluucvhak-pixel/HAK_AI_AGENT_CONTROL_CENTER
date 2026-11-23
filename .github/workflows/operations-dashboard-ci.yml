@@ -26,6 +26,8 @@ jobs:
       - run: npm test
       - name: Run isolated real HTTP operator smoke
         run: node scripts/accept-windows-smoke.mjs
+      - name: Verify synthetic Observer backup, SHA256 and restore replay
+        run: npm run accept:observer-backup
       - name: Generate diagnostic acceptance packet (not production approval)
         shell: bash
         run: node scripts/accept-packet.mjs > acceptance-packet.json
