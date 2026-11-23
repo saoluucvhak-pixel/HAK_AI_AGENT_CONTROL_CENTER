@@ -16,6 +16,7 @@ async function load(){
    card.append(title);
    if(repo.error){card.append(el('p','Không đọc được: '+repo.error,'warning'));}
    else{
+    if(repo.stale)card.append(el('p','Dữ liệu lưu trước đó; cập nhật GitHub thất bại: '+(repo.refreshError||'không xác định'),'warning'));
     card.append(el('p','PR đang mở: '+(repo.openPullRequestsCountIsLowerBound?'≥ ':'')+repo.openPullRequests+' · Nhánh: '+repo.defaultBranch));
     const ci=repo.latestRun;card.append(el('p',ci?'CI gần nhất: '+ci.status+' / '+(ci.conclusion||'chưa kết luận'):'Chưa có lần chạy CI được trả về'));
     if(ci)addLink(card,ci.url,'Xem GitHub Actions');
@@ -23,7 +24,7 @@ async function load(){
    }
    $('repos').append(card);
   }
-  $('status').textContent='Nguồn GitHub API · cập nhật lúc '+new Date(data.updatedAt).toLocaleString('vi-VN')+'. Dữ liệu có thể trễ tối đa 60 giây.';
+  $('status').textContent='Nguồn GitHub API · cập nhật lúc '+new Date(data.updatedAt).toLocaleString('vi-VN')+'. Dữ liệu được lưu tối đa 5 phút giữa các lần truy vấn; khi GitHub lỗi có thể hiển thị dữ liệu cũ kèm cảnh báo.';
   await loadTopology();
  }catch(e){$('status').textContent='Không tải được dữ liệu: '+e.message;}
  finally{$('refresh').disabled=false;}

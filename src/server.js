@@ -3,6 +3,7 @@ import {randomBytes} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {snapshots,safeRepo} from './github.js';
+import {createSnapshotCache} from './github-snapshot-cache.js';
 import {githubPrEvidence} from './github-pr-evidence.js';
 import {assessGithubPrEvidence} from './github-pr-assessment.js';
 import {githubFailedJobTriage} from './github-ci-triage.js';
@@ -22,19 +23,9 @@ const observerToken=process.env.HAK_OBSERVER_TOKEN||randomBytes(32).toString('he
 const observerStore=new EventStore(process.env.HAK_EVENT_STORE_PATH||'./data/agent-events.jsonl');
 await observerStore.load();
 const observer=createObserverApi({token:observerToken,registry:observerStore,localReadOnly:true});
-let cache=null,cacheTime=0,cacheRefresh=null;
-const REPO_CACHE_MS=5*60*1000;
-async function cachedSnapshots(){
- if(cache&&Date.now()-cacheTime<REPO_CACHE_MS)return cache;
- if(cacheRefresh)return cacheRefresh;
- cacheRefresh=snapshots().then(next=>{
-  const previous=new Map((cache||[]).filter(item=>!item.error).map(item=>[item.name,item]));
-  cache=next.map(item=>item.error&&previous.has(item.name)?{...previous.get(item.name),stale:true,refreshError:item.error}:item);
-  cacheTime=Date.now();
-  return cache;
- }).finally(()=>{cacheRefresh=null});
- return cacheRefresh;
-}
+let cache=null,cacheTime=0;
+const getSnapshots=createSnapshotCache({load:snapshots});
+async function cachedSnapshots(){cache=await getSnapshots();cacheTime=Date.now();return cache;}
 export const server=createServer(async(req,res)=>{
  res.setHeader('Cache-Control','no-store');
  res.setHeader('X-Content-Type-Options','nosniff');
