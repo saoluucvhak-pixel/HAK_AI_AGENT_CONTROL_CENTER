@@ -15,3 +15,19 @@ test('blocks failed, cancelled or unfinished CI even when SHA matches',async()=>
   assert.equal(calls,1);
  }
 });
+
+test('rejects successful CI from wrong workflow, event, branch or repository',async()=>{
+ const valid={id:1,head_sha:sha,status:'completed',conclusion:'success',name:'Operations Dashboard CI',event:'push',head_branch:'main',repository:{full_name:'saoluucvhak-pixel/HAK_AI_SKILLS'},head_repository:{full_name:'saoluucvhak-pixel/HAK_AI_SKILLS'}};
+ const invalid=[
+  {name:'Unrelated CI'}, {event:'pull_request'}, {head_branch:'feature/unsafe'},
+  {repository:{full_name:'other/HAK_AI_SKILLS'}},
+  {head_repository:{full_name:'other/HAK_AI_SKILLS'}},
+  {head_repository:null}
+ ];
+ for(const fields of invalid){
+  let calls=0;
+  const fetchImpl=async url=>{calls++;return {ok:true,json:async()=>({...valid,...fields})}};
+  await assert.rejects(()=>githubPatchPreflight(proposal,{fetchImpl}),/CI run identity/);
+  assert.equal(calls,1,'untrusted CI must stop before source inspection');
+ }
+});
