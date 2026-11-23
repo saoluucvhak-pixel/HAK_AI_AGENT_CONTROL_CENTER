@@ -13,5 +13,10 @@ try{
   if(!report.includes(marker))throw Error('Missing readiness marker: '+marker);
  }
  if(!run.stdout.includes('HAK EXTERNAL AGENT READINESS'))throw Error('No operator-readable summary');
- console.log('PASS: Isolated readiness report, all five unconfigured states and non-production disclaimers');
+ const invalidEnv={...env,HAK_RUFLO_URL:'https://example.com'};
+ const invalid=spawnSync(process.execPath,[resolve('scripts/agent-readiness-windows.mjs')],{cwd:dir,env:invalidEnv,encoding:'utf8',timeout:15000});
+ if(invalid.error||invalid.status===0)throw Error('Invalid non-loopback endpoint must fail closed');
+ const invalidReport=readFileSync(join(dir,'HAK_AGENT_READINESS_RESULT.txt'),'utf8');
+ if(!invalidReport.includes('Ruflo multi-agent: unreachable-or-invalid')||!invalidReport.includes('External execution verified: NO')||!invalidReport.includes('Production approved: NO'))throw Error('Invalid endpoint report missing safeguards');
+ console.log('PASS: Isolated readiness report, fail-closed invalid endpoint, and non-production disclaimers');
 }finally{rmSync(dir,{recursive:true,force:true})}
