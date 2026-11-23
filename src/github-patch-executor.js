@@ -28,8 +28,17 @@ export async function executeGithubPatchProposal(proposal,{branch,authorized=fal
  }
  const baseCommit=await request('/git/commits/'+p.baseSha);
  if(!SHA.test(baseCommit?.tree?.sha||''))throw new Error('Invalid base tree');
+ // Preserve each existing file mode. Never silently strip executable bits or replace symlinks/submodules.
+ const originalTree=await request('/git/trees/'+baseCommit.tree.sha+'?recursive=1');
+ if(originalTree?.truncated!==false||!Array.isArray(originalTree.tree))throw new Error('Cannot verify complete source tree; patch blocked');
+ const originalFiles=new Map(originalTree.tree.filter(e=>e.type==='blob').map(e=>[e.path,e]));
+ const entries=p.changes.map(c=>{
+  const original=originalFiles.get(c.path);
+  if(!original||original.sha!==c.expectedBlobSha||!['100644','100755'].includes(original.mode))throw new Error('Source tree blob or file mode mismatch; patch blocked');
+  return {path:c.path,mode:original.mode,type:'blob',content:c.newContent};
+ });
  // Prepare the entire new tree and commit without moving any branch ref.
- const tree=await request('/git/trees','POST',{base_tree:baseCommit.tree.sha,tree:p.changes.map(c=>({path:c.path,mode:'100644',type:'blob',content:c.newContent}))});
+ const tree=await request('/git/trees','POST',{base_tree:baseCommit.tree.sha,tree:entries});
  if(!SHA.test(tree?.sha||''))throw new Error('Invalid generated tree');
  const commit=await request('/git/commits','POST',{message:'fix: '+p.rationale.slice(0,70),tree:tree.sha,parents:[p.baseSha]});
  if(!SHA.test(commit?.sha||''))throw new Error('Invalid generated commit');
