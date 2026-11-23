@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {githubPrEvidence} from '../src/github-pr-evidence.js';
 const sha='a'.repeat(40);
-function mock(checkRuns){return async url=>({ok:true,json:async()=>url.includes('/pulls/4/commits?')?[{sha}]:url.includes('/check-runs?')?{check_runs:checkRuns,total_count:checkRuns.length}: {head:{sha},state:'open',draft:false}});}
+function mock(checkRuns){return async url=>({ok:true,json:async()=>url.includes('/pulls/4/commits?')?[{sha}]:url.includes('/check-runs?')?{check_runs:checkRuns.map((c,i)=>({id:i+1,...c})),total_count:checkRuns.length}: {head:{sha},state:'open',draft:false}});}
 test('green CI does not certify review or merge',async()=>{
  const r=await githubPrEvidence('HAK_CODE_QUALITY_TEST',4,{fetchImpl:mock([{name:'node windows',status:'completed',conclusion:'success'},{name:'node ubuntu',status:'completed',conclusion:'success'}]),token:''});
  assert.equal(r.allChecksPassed,true);assert.equal(r.readyToMerge,false);assert.equal(r.codeReviewed,false);assert.equal(r.headSha,sha);
