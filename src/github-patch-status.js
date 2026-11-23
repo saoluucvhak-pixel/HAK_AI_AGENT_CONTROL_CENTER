@@ -1,13 +1,14 @@
 const OWNER='saoluucvhak-pixel',REPO='HAK_AI_AGENT_CONTROL_CENTER';
 export function classifyPatchPr(pr){
  const branch=pr?.head?.ref||'';
- if(!/^hak-fix\/acceptance-[0-9]+$/.test(branch))return null;
- const runId=Number(branch.slice('hak-fix/acceptance-'.length));
- return {number:pr.number,title:pr.title,draft:!!pr.draft,state:pr.state,branch,headSha:pr.head.sha,url:pr.html_url,runId,stage:pr.state==='closed'?(pr.merged_at?'merged':'closed'):pr.draft?'review-required':'ready-for-review',nextAction:pr.state==='closed'?'No action':pr.draft?'Review fixture-only diff; do not merge acceptance PR':'Confirm policy and human approval before merge'};
+ if(!/^hak-fix\/[a-z0-9][a-z0-9-]{2,50}$/.test(branch))return null;
+ const acceptance=/^hak-fix\/acceptance-[0-9]+$/.test(branch);
+ const runId=acceptance?Number(branch.slice('hak-fix/acceptance-'.length)):null;
+ return {number:pr.number,title:pr.title,draft:!!pr.draft,state:pr.state,branch,headSha:pr.head.sha,url:pr.html_url,runId,kind:acceptance?'acceptance':'patch',stage:pr.state==='closed'?(pr.merged_at?'merged':'closed'):pr.draft?'review-required':'ready-for-review',nextAction:pr.state==='closed'?'No action':pr.draft?(acceptance?'Review fixture-only diff; do not merge acceptance PR':'Review patch diff and CI; human approval required'):'Confirm policy and human approval before merge'};
 }
 export function classifyPatchRun(run){
- const state=run.status!=='completed'?'running':run.conclusion==='success'?'passed':'failed';
- return {id:run.id,status:state,conclusion:run.conclusion||null,url:run.html_url,sha:run.head_sha,createdAt:run.created_at,nextAction:state==='failed'?'Inspect workflow logs and use recovery for a created branch':state==='running'?'Wait for completion':'Check linked Draft PR and evidence artifact'};
+ const state=run.status==='completed'?(run.conclusion==='success'?'passed':run.conclusion==='failure'?'failed':'needs-attention'):['queued','in_progress','waiting','pending','requested'].includes(run.status)?'running':'unknown';
+ return {id:run.id,status:state,conclusion:run.conclusion||null,url:run.html_url,sha:run.head_sha,createdAt:run.created_at,nextAction:state==='failed'?'Inspect workflow logs and use recovery for a created branch':state==='running'?'Wait for completion':state==='passed'?'Check linked Draft PR and evidence artifact':'Inspect GitHub run status manually; do not assume success'};
 }
 export async function githubPatchStatus({fetchImpl=fetch,token=process.env.GITHUB_TOKEN}={}){
  const headers={Accept:'application/vnd.github+json','User-Agent':'HAK-Operations-Dashboard'};
