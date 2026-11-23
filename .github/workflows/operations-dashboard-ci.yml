@@ -24,6 +24,8 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm run check
       - run: npm test
+      - name: Run isolated real HTTP operator smoke
+        run: node scripts/accept-windows-smoke.mjs
       - name: Generate diagnostic acceptance packet (not production approval)
         shell: bash
         run: node scripts/accept-packet.mjs > acceptance-packet.json
