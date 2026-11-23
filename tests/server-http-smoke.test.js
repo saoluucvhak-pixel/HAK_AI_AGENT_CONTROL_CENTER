@@ -49,3 +49,25 @@ test('real HTTP server rejects unauthorized event writes and unsupported methods
     await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
   }
 });
+
+test('real HTTP observer status is read-only and public only for local status',async()=>{
+  server.listen(0,'127.0.0.1');
+  try{
+    await once(server,'listening');
+    const address=server.address();
+    assert.ok(address && typeof address!=='string');
+    const base='http://127.0.0.1:'+address.port;
+    const status=await fetch(base+'/api/agent-status',{signal:AbortSignal.timeout(5000)});
+    assert.equal(status.status,200);
+    const data=await status.json();
+    assert.ok(Array.isArray(data.tasks));
+    assert.equal(typeof data.persistent,'boolean');
+    const forbidden=await fetch(base+'/api/agent-status',{method:'POST',signal:AbortSignal.timeout(5000)});
+    assert.equal(forbidden.status,401);
+    assert.deepEqual(await forbidden.json(),{error:'unauthorized'});
+    const readEvents=await fetch(base+'/api/agent-events',{signal:AbortSignal.timeout(5000)});
+    assert.equal(readEvents.status,401);
+  }finally{
+    await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
+  }
+});
