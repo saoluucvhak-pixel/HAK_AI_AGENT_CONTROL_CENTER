@@ -1,6 +1,7 @@
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {resolve} from 'node:path';
+import {resolve,join} from 'node:path';
+import {existsSync} from 'node:fs';
 import {setTimeout as sleep} from 'node:timers/promises';
 
 const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
@@ -33,6 +34,11 @@ export function openBrowser(url,platform=process.platform,spawnImpl=spawn){
  return spawnImpl('xdg-open',[url],{stdio:'ignore',detached:true}).unref();
 }
 async function main(){
+ const envPath=join(root,'.env');
+ if(existsSync(envPath)){
+  if(typeof process.loadEnvFile!=='function')throw new Error('Node.js 22+ is required to load local AI settings');
+  process.loadEnvFile(envPath);
+ }
  const port=validPort(process.env.PORT||4317);
  const url='http://127.0.0.1:'+port;
  const state=await inspectDashboard(url);
