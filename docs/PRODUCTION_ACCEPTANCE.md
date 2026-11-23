@@ -36,3 +36,6 @@ Stop the Dashboard before backing up to avoid concurrent writes. Run `npm run ba
 
 ## Isolated recovery drill
 Run `npm run drill:observer -- <backup-path> <sha256>` after creating and verifying a private Observer backup. The drill checks SHA256, copies the backup into a temporary directory, replays the event store, compares event counts, and removes the temporary copy. It never overwrites or modifies the active Observer store. This is automated recovery rehearsal only, not a full operational restore or production sign-off.
+
+## One-command local acceptance baseline
+On an operator-approved Windows computer, from the checked-out repository root run `npm run accept:local`. It runs `npm run check`, `npm test` and existing loopback-only connectivity probes; prints a sanitized JSON summary with no command stdout/stderr or credentials; and exits nonzero if Node 22+, syntax checks or unit tests fail. Keep provider keys only in private local environment variables. This command **does not start agents**, execute paid provider requests, or certify production readiness. Compare the output with Issue #32 and perform the real provider/desktop acceptance steps separately.
