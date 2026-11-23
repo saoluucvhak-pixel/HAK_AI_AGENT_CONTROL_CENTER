@@ -13,12 +13,15 @@ test('local dashboard security headers, write restrictions and sensitive route b
  const dir=await mkdtemp(join(tmpdir(),'hak-security-'));
  const port=45000+Math.floor(Math.random()*10000);
  const token='local-test-token-12345678901234567890';
- const child=spawn(process.execPath,['src/server.js'],{cwd:root,env:{...process.env,PORT:String(port),HAK_OBSERVER_TOKEN:token,HAK_EVENT_STORE_PATH:join(dir,'events.jsonl')},stdio:'ignore'});
+ const child=spawn(process.execPath,['src/server.js'],{cwd:root,env:{...process.env,PORT:String(port),HAK_OBSERVER_TOKEN:token,HAK_EVENT_STORE_PATH:join(dir,'events.jsonl'),HAK_AGENT_OUTPUT_DIR:join(dir,'agent-results')},stdio:['ignore','ignore','pipe']});
+ let stderr='';
+ child.stderr.setEncoding('utf8');
+ child.stderr.on('data',chunk=>{stderr=(stderr+chunk).slice(-3000);});
  const base='http://127.0.0.1:'+port;
  try{
   let ready=false;
   for(let i=0;i<80;i++){
-   if(child.exitCode!==null)throw new Error('Dashboard exited before readiness');
+   if(child.exitCode!==null)throw new Error('Dashboard exited before readiness: '+stderr);
    try{const r=await fetch(base+'/api/health',{signal:AbortSignal.timeout(300)});if(r.ok){ready=true;break}}catch{}
    await delay(100);
   }
