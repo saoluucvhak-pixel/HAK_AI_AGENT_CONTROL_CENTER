@@ -15,3 +15,17 @@ test('fetches only read-only GitHub status and filters workflow runs',async()=>{
  const result=await githubPatchStatus({fetchImpl,token:''});
  assert.equal(result.runs.length,1);assert.equal(result.prs.length,1);assert.equal(result.readOnly,true);assert.equal(urls.length,2);
 });
+
+test('production patch PRs are visible without acceptance run ID',()=>{
+ const pr=classifyPatchPr({number:80,title:'patch',draft:true,state:'open',head:{ref:'hak-fix/production-fix',sha:'a'.repeat(40)}});
+ assert.equal(pr.kind,'patch');assert.equal(pr.runId,null);assert.equal(pr.stage,'review-required');
+});
+test('cancelled and unknown workflow conclusions are not classified as success',()=>{
+ assert.equal(classifyPatchRun({id:1,status:'completed',conclusion:'cancelled'}).status,'needs-attention');
+ assert.equal(classifyPatchRun({id:2,status:'mystery'}).status,'unknown');
+});
+test('status exposes completeness when PR list fits first page',async()=>{
+ const fetchImpl=async url=>({ok:true,json:async()=>url.includes('/runs?')?{workflow_runs:[]}:[]});
+ const result=await githubPatchStatus({fetchImpl,token:''});
+ assert.equal(result.complete,true);assert.equal(result.readOnly,true);
+});
