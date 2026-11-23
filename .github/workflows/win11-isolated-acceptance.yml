@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Verify exact main SHA
+      - name: Verify Windows 11 VM platform (fail closed)\n        shell: pwsh\n        run: |\n          if (-not $IsWindows) { throw 'This workflow requires Windows' }\n          $os = Get-CimInstance Win32_OperatingSystem\n          $build = [int]$os.BuildNumber\n          if ($os.ProductType -ne 1 -or $build -lt 22000) { throw 'Windows 11 client VM required; runner labels are not proof' }\n          if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js missing' }\n          Write-Host 'Windows 11 client platform confirmed; VM isolation requires operator review.'\n      - name: Verify exact main SHA
         shell: pwsh
         run: |
           if ($env:GITHUB_REF -ne 'refs/heads/main') { throw 'Only main is permitted' }
