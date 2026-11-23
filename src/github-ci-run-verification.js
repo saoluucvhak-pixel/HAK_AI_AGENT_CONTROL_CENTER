@@ -11,5 +11,6 @@ export async function githubVerifiedCiRun(name,runId,expectedSha,{fetchImpl=fetc
  const run=await response.json();
  if(!run||typeof run.head_sha!=='string'||!/^[a-f0-9]{40}$/.test(run.head_sha)||!run.id)throw new Error('Invalid GitHub run response');
  const verified=run.id===runId&&run.head_sha===expectedSha;
- return {kind:'hak-github-ci-run-sha-verification',repository:name,runId,expectedSha,observedSha:run.head_sha,verified,runConclusion:run.conclusion??null,runStatus:run.status??null,source:'github-api',readyForSourceInspection:verified,notice:verified?'Run head SHA matches requested immutable source revision.':'CI run SHA mismatch; do not inspect or patch requested revision.'};
+ const trustedSource=run.name==='Operations Dashboard CI'&&run.event==='push'&&run.head_branch==='main'&&run.repository?.full_name===OWNER+'/'+name&&run.head_repository?.full_name===OWNER+'/'+name;
+ return {kind:'hak-github-ci-run-sha-verification',repository:name,runId,expectedSha,observedSha:run.head_sha,verified,trustedSource,runConclusion:run.conclusion??null,runStatus:run.status??null,source:'github-api',readyForSourceInspection:verified,notice:verified?'Run head SHA matches requested immutable source revision.':'CI run SHA mismatch; do not inspect or patch requested revision.'};
 }
