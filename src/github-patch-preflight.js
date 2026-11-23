@@ -6,6 +6,7 @@ export async function githubPatchPreflight(proposal,{fetchImpl=fetch,token=proce
  const verification=await githubVerifiedCiRun(checked.repository,checked.runId,checked.baseSha,{fetchImpl,token});
  if(!verification.verified)throw new Error('CI run SHA mismatch; patch blocked');
  if(verification.runStatus!=='completed'||verification.runConclusion!=='success')throw new Error('CI run is not completed successfully; patch blocked');
+ if(!verification.trustedSource)throw new Error('CI run identity is not a successful Operations Dashboard CI push on main; patch blocked');
  const inspection=await githubSourceInspection(checked.repository,checked.baseSha,checked.changes.map(c=>c.path),{fetchImpl,token});
  const files=checked.changes.map(change=>{
   const found=inspection.files.find(f=>f.path===change.path);
