@@ -24,10 +24,10 @@ jobs:
       - run: npm test
       - name: Generate diagnostic acceptance packet (not production approval)
         shell: bash
-        run: npm run accept:packet > acceptance-packet.json
+        run: node scripts/accept-packet.mjs > acceptance-packet.json
       - name: Verify diagnostic packet integrity
         shell: bash
-        run: npm run accept:verify -- acceptance-packet.json > acceptance-verification.json
+        run: node scripts/verify-acceptance-packet.mjs acceptance-packet.json > acceptance-verification.json
       - name: Upload OS-specific diagnostic evidence
         uses: actions/upload-artifact@v4
         with:
