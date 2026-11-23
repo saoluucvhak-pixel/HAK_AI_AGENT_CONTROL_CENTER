@@ -4,7 +4,7 @@ The workflow `.github/workflows/github-patch-live-acceptance.yml` is **manual-on
 
 1. Confirm the main branch CI has completed. Copy the CI run ID for the **exact current main commit**. A stale, incomplete or failed run is rejected by the acceptance harness before any write.
 2. In GitHub Actions, open **GitHub Patch Live Acceptance (manual only)** and select **Run workflow** on main. Enter the CI run ID and review the rationale.
-3. Check the job logs for `status: verified`, branch SHA, commit SHA and PR URL. Check that the PR is draft, changes only the isolated fixture, and has no unrelated files.
+3. Check the job logs for `status: verified`, branch SHA, commit SHA and PR URL. Download the `github-patch-live-acceptance-evidence` artifact and retain it with the run URL. Only a successful `Operations Dashboard CI` **push run on main** is accepted. Check that the PR is draft, changes only the isolated fixture, and has no unrelated files.
 4. Inspect its CI jobs and close the draft PR after recording evidence; **do not merge** this acceptance fixture.
 5. If the workflow fails, inspect the branch and use the read-only recovery function. Do not re-run blindly.
 
