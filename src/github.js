@@ -7,7 +7,11 @@ export async function githubSnapshot(name,{fetchImpl=fetch,token=process.env.GIT
  if(token)headers.Authorization='Bearer '+token;
  async function read(path){
   const response=await fetchImpl('https://api.github.com/repos/'+OWNER+'/'+name+path,{headers,signal:AbortSignal.timeout(8000)});
-  if(!response.ok)throw new Error('GitHub HTTP '+response.status);
+  if(!response.ok){
+   const remaining=response.headers?.get?.('x-ratelimit-remaining');
+   if(response.status===403&&remaining==='0')throw new Error('GitHub API rate limit exhausted (HTTP 403); wait for reset or configure GITHUB_TOKEN');
+   throw new Error('GitHub HTTP '+response.status);
+  }
   return response.json();
  }
  const [repo,prs,runs]=await Promise.all([read(''),read('/pulls?state=open&per_page=30'),read('/actions/runs?per_page=10')]);
