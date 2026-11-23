@@ -24,11 +24,11 @@ await observerStore.load();
 const observer=createObserverApi({token:observerToken,registry:observerStore,localReadOnly:true});
 let cache=null,cacheTime=0;
 export const server=createServer(async(req,res)=>{
- const path=new URL(req.url||'/', 'http://localhost').pathname;
  res.setHeader('Cache-Control','no-store');
  res.setHeader('X-Content-Type-Options','nosniff');
  res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'");
  try{
+  const path=new URL(req.url||'/', 'http://localhost').pathname;
   if(path==='/api/agent-events'||path==='/api/agent-status'){
    await observer(req,res,path);return;
   }
