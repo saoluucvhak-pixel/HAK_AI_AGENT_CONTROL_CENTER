@@ -30,3 +30,40 @@ test('publishes two file changes in one atomic commit and opens draft PR',async(
 test('requires authorization before network',async()=>{const x=fake();await assert.rejects(()=>executeGithubPatchProposal(proposal,{branch:'hak-fix/test',token:'fake',fetchImpl:x.fetchImpl}),/authorization/);assert.equal(x.calls.length,0)});
 test('rejects stale base and blob without writing',async()=>{for(const cfg of [{mainSha:'e'.repeat(40)},{fileSha:'e'.repeat(40)}]){const x=fake(cfg);await assert.rejects(()=>executeGithubPatchProposal(proposal,{branch:'hak-fix/test',authorized:true,token:'fake',fetchImpl:x.fetchImpl}));assert.equal(x.calls.some(c=>c.method!=='GET'),false)}});
 test('reports recoverable branch after draft PR failure',async()=>{const x=fake({prFails:true});await assert.rejects(()=>executeGithubPatchProposal(proposal,{branch:'hak-fix/test',authorized:true,token:'fake',fetchImpl:x.fetchImpl}),/recover manually/)});
+
+test('main advances after commit preparation: no fix branch is published',async()=>{
+ const x=fake();let mainReads=0;
+ const fetchImpl=async(url,opts)=>{
+  if(url.includes('/git/ref/heads/main')){
+   mainReads++;
+   if(mainReads===2)return {ok:true,json:async()=>({object:{sha:'e'.repeat(40)}})};
+  }
+  return x.fetchImpl(url,opts);
+ };
+ await assert.rejects(()=>executeGithubPatchProposal(proposal,{branch:'hak-fix/test',authorized:true,token:'fake',fetchImpl}),/advanced during patch/);
+ assert.equal(x.calls.some(c=>c.url.endsWith('/git/refs')),false);
+ assert.equal(x.calls.some(c=>c.url.endsWith('/pulls')),false);
+});
+test('concurrent branch name collision does not open a PR',async()=>{
+ const x=fake();
+ const fetchImpl=async(url,opts)=>{
+  if(url.endsWith('/git/refs')&&opts?.method==='POST')return {ok:false,status:422};
+  return x.fetchImpl(url,opts);
+ };
+ await assert.rejects(()=>executeGithubPatchProposal(proposal,{branch:'hak-fix/test',authorized:true,token:'fake',fetchImpl}),/GitHub conflict/);
+ assert.equal(x.calls.some(c=>c.url.endsWith('/pulls')),false);
+});
+test('branch reference drift after publication prevents PR',async()=>{
+ const x=fake();
+ const fetchImpl=async(url,opts)=>{
+  if(url.includes('/git/ref/heads/hak-fix/'))return {ok:true,json:async()=>({object:{sha:'e'.repeat(40)}})};
+  return x.fetchImpl(url,opts);
+ };
+ await assert.rejects(()=>executeGithubPatchProposal(proposal,{branch:'hak-fix/test',authorized:true,token:'fake',fetchImpl}),/Dedicated branch SHA mismatch/);
+ assert.equal(x.calls.some(c=>c.url.endsWith('/pulls')),false);
+});
+test('rejects unsafe branch names before GitHub access',async()=>{
+ const x=fake();
+ await assert.rejects(()=>executeGithubPatchProposal(proposal,{branch:'main',authorized:true,token:'fake',fetchImpl:x.fetchImpl}),/Invalid dedicated/);
+ assert.equal(x.calls.length,0);
+});
