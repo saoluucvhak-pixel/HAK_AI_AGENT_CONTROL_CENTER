@@ -6,6 +6,7 @@ import {snapshots,safeRepo} from './github.js';
 import {githubPrEvidence} from './github-pr-evidence.js';
 import {assessGithubPrEvidence} from './github-pr-assessment.js';
 import {githubFailedJobTriage} from './github-ci-triage.js';
+import {createGithubRemediationPlan} from './github-remediation-plan.js';
 import {createObserverApi} from './observer-api.js';
 import {EventStore} from './event-store.js';
 import {topology,toMermaid} from './topology.js';
@@ -55,7 +56,7 @@ export const server=createServer(async(req,res)=>{
     res.writeHead(400,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'Repository not allowed'}));return;
    }
    const report=await githubFailedJobTriage(repo,Number(runText));
-   res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(report));return;
+   res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({...report,remediationPlan:createGithubRemediationPlan(report)}));return;
   }
   if(path==='/api/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,app:'hak-agent-control-center',mode:'read-only',host}));return;}
   if(path==='/api/evidence'){
