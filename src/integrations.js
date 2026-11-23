@@ -17,9 +17,28 @@ export async function routeModel(task, {env=process.env,fetchImpl=fetch}={}) {
   if (!/^[a-zA-Z0-9_./:-]{1,128}$/.test(model)) throw new Error('Invalid model identifier');
   const response=await fetchImpl(cfg.baseUrl+'/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'user',content:validated.prompt}],stream:false}),redirect:'manual',signal:AbortSignal.timeout(60000)});
   if (!response.ok) throw new Error('Model gateway failed with HTTP '+response.status);
-  const result=await response.json();
+  const maxBytes=1024*1024;
+  const declaredLength=Number(response.headers?.get?.('content-length'));
+  if(Number.isFinite(declaredLength)&&declaredLength>maxBytes)throw new Error('Gateway response exceeds size limit');
+  let result;
+  if(response.body&&typeof response.body.getReader==='function'){
+    const reader=response.body.getReader();
+    const chunks=[];let size=0;
+    try{
+      while(true){
+        const {done,value}=await reader.read();if(done)break;
+        size+=value.byteLength;
+        if(size>maxBytes)throw new Error('Gateway response exceeds size limit');
+        chunks.push(value);
+      }
+    }finally{reader.releaseLock()}
+    const data=Buffer.concat(chunks.map(x=>Buffer.from(x)));
+    try{result=JSON.parse(data.toString('utf8'))}catch{throw new Error('Malformed gateway response')}
+  }else{
+    result=await response.json();
+  }
   const answer=result?.choices?.[0]?.message?.content;
-  if (typeof answer !== 'string') throw new Error('Malformed gateway response');
+  if (typeof answer !== 'string'||answer.length>128000) throw new Error('Malformed gateway response');
   return {role:validated.role,model:result.model||model,answer};
 }
 export function claudeMemBridge(record, {env=process.env}={}) {
