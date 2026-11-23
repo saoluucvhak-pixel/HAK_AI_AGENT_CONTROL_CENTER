@@ -9,9 +9,10 @@ test('sensitive task rejected before network call',async()=>await assert.rejects
 test('memory is off without approval',()=>assert.equal(claudeMemBridge({approved:false,sensitive:false}).enabled,false));
 test('memory opt in scoped to project',()=>assert.deepEqual(claudeMemBridge({approved:true,sensitive:false,projectId:'hak',summary:'Use PR review'},{env:{HAK_CLAUDE_MEM_ENABLED:'true'}}),{enabled:true,projectId:'hak',summary:'Use PR review',mode:'reviewed-export-only'}));
 
-test('gateway rejects a response without a bounded readable stream',async()=>{
+test('injected mock response is size-checked without a stream',async()=>{
  const env={HAK_OMNIROUTE_ENABLED:'true',HAK_OMNIROUTE_API_KEY:'1234567890123456'};
- await assert.rejects(routeModel({role:'coder',prompt:'test',sensitive:false},{env,fetchImpl:async()=>({ok:true,headers:{get:()=>null},json:async()=>({choices:[{message:{content:'ok'}}]})})}),/stream unavailable/);
+ const result=await routeModel({role:'coder',prompt:'test',sensitive:false},{env,fetchImpl:async()=>({ok:true,headers:{get:()=>null},json:async()=>({choices:[{message:{content:'ok'}}]})})});
+ assert.equal(result.answer,'ok');
 });
 test('gateway cancels an oversized streamed response',async()=>{
  const env={HAK_OMNIROUTE_ENABLED:'true',HAK_OMNIROUTE_API_KEY:'1234567890123456'};
