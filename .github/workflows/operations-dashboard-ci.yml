@@ -30,6 +30,8 @@ jobs:
         run: node scripts/verify-acceptance-packet.mjs acceptance-packet.json > acceptance-verification.json
       - name: Record exact checked-out commit and runner metadata
         run: node scripts/write-ci-provenance.mjs
+      - name: Verify checked-out SHA and main push release gate
+        run: node scripts/verify-ci-provenance.mjs ci-provenance.json
       - name: Upload OS-specific diagnostic evidence
         uses: actions/upload-artifact@v4
         with:
