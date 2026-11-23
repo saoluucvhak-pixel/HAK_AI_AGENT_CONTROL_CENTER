@@ -19,3 +19,22 @@ test('repository and PR number are restricted',async()=>{
 test('GitHub 403 propagates as error',async()=>{
  await assert.rejects(()=>githubPrEvidence('HAK_AI_SKILLS',4,{fetchImpl:async()=>({ok:false,status:403})}),/403/);
 });
+
+test('100 check runs are treated as potentially truncated, never all green',async()=>{
+ const checks=Array.from({length:100},(_,i)=>({name:'check-'+i,status:'completed',conclusion:'success'}));
+ const r=await githubPrEvidence('HAK_AI_SKILLS',4,{fetchImpl:mock(checks),token:''});
+ assert.equal(r.checkListTruncated,true);
+ assert.equal(r.evidenceComplete,false);
+ assert.equal(r.allChecksPassed,false);
+});
+test('100 commits are treated as potentially truncated, never all green',async()=>{
+ const fetchImpl=async url=>({ok:true,json:async()=>
+  url.includes('/pulls/4/commits?')?Array.from({length:100},()=>({sha})):
+  url.includes('/check-runs?')?{check_runs:[{name:'CI',status:'completed',conclusion:'success'}]}:
+  {head:{sha},state:'open',draft:false}
+ });
+ const r=await githubPrEvidence('HAK_AI_SKILLS',4,{fetchImpl,token:''});
+ assert.equal(r.commitListTruncated,true);
+ assert.equal(r.evidenceComplete,false);
+ assert.equal(r.allChecksPassed,false);
+});
