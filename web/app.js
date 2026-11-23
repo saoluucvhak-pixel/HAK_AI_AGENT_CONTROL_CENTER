@@ -109,7 +109,7 @@ async function loadPatches(){
    card.append(el('h3','PR #'+pr.number+' · '+pr.stage),el('p',pr.branch),el('p',pr.nextAction));
    addLink(card,pr.url,'Xem Pull Request');$('patches').append(card);
   }
-  $('patch-status').textContent=(report.runs||[]).length+' workflow · '+(report.prs||[]).length+' PR · Chỉ đọc';
+  $('patch-status').textContent=(report.runs||[]).length+' workflow · '+(report.prs||[]).length+' PR · '+(report.complete?'Danh sách đầy đủ':'Danh sách có thể chưa đầy đủ')+' · Chỉ đọc';
  }catch(error){$('patch-status').textContent='Không tải được trạng thái bản vá: '+error.message;}
  finally{$('refresh-patches').disabled=false;}
 }
