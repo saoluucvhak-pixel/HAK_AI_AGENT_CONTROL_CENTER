@@ -3,8 +3,11 @@ import {probeTools} from './readiness-probes.js';
 
 export function runNpmScript(name,{spawnImpl=spawnSync,platform=process.platform}={}){
  if(!['check','test'].includes(name))throw new Error('Unsupported acceptance script');
- const command=platform==='win32'?'npm.cmd':'npm';
- const result=spawnImpl(command,['run',name],{shell:false,encoding:'utf8',timeout:180000,maxBuffer:1024*1024,windowsHide:true,stdio:'pipe'});
+ // Windows .cmd shims require cmd.exe; the command is strictly allowlisted and contains no user input.
+ const isWindows=platform==='win32';
+ const command=isWindows?'cmd.exe':'npm';
+ const args=isWindows?['/d','/s','/c','npm run '+name]:['run',name];
+ const result=spawnImpl(command,args,{shell:false,encoding:'utf8',timeout:180000,maxBuffer:1024*1024,windowsHide:true,stdio:'pipe'});
  return {id:'npm-'+name,status:result.error?'blocked':result.status===0?'passed':'failed',exitCode:Number.isInteger(result.status)?result.status:null};
 }
 export async function localAcceptance({env=process.env,platform=process.platform,nodeVersion=process.versions.node,spawnImpl=spawnSync,probeImpl=probeTools}={}){
