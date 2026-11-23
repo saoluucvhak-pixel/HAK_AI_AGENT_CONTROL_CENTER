@@ -10,13 +10,17 @@ const digest=text=>createHash('sha256').update(text).digest('hex');
  * invokes shell commands or marks provider identity / production as verified.
  * Output content is intentionally excluded from the audit report.
  */
-export async function executeApprovedWorkOrder({workOrder,roles,approval,env=process.env,modelRunner=routeModel,onEvent=async()=>{}}={}){
+export async function executeApprovedWorkOrder({workOrder,roles,approval,env=process.env,modelRunner=routeModel,onEvent=async()=>{},verifyApproval,saveOutput}={}){
  const order=createWorkOrder(workOrder);
  const proposal=proposeDelegation(order,roles);
  if(!approval||approval.approved!==true||approval.workOrderId!==order.id||
     typeof approval.approvedBy!=='string'||!/^[a-zA-Z0-9_.@-]{3,128}$/.test(approval.approvedBy)||
     typeof approval.reason!=='string'||!approval.reason.trim()||approval.reason.length>500)
    throw new Error('Explicit matching human approval required');
+ if(typeof verifyApproval!=='function')throw new Error('Trusted approval verifier required');
+ if(typeof saveOutput!=='function')throw new Error('Secure output storage callback required');
+ const approvalVerified=await verifyApproval({workOrderId:order.id,projectId:order.projectId,approval});
+ if(approvalVerified!==true)throw new Error('Approval not verified by trusted authority');
  if(env.HAK_AGENT_EXECUTION_ENABLED!=='true')throw new Error('Agent execution disabled');
  if(env.HAK_OMNIROUTE_ENABLED!=='true')throw new Error('Model gateway disabled');
  if(typeof modelRunner!=='function'||typeof onEvent!=='function')throw new Error('Invalid execution dependencies');
@@ -32,7 +36,10 @@ export async function executeApprovedWorkOrder({workOrder,roles,approval,env=pro
   try{
    const output=await modelRunner({role:ROLES[agentRole],sensitive:false,prompt},{env});
    if(!output||typeof output.answer!=='string'||!output.answer.trim()||output.answer.length>128000)throw Error('Invalid model output');
-   const result={step:index+1,agentRole,status:'passed',outputSha256:digest(output.answer),outputLength:output.answer.length,modelReported:typeof output.model==='string'?output.model.slice(0,128):'unknown',humanReviewRequired:true};
+   const outputSha256=digest(output.answer);
+   const saved=await saveOutput({workOrderId:order.id,projectId:order.projectId,taskId,agentRole,content:output.answer,sha256:outputSha256});
+   if(saved!==true)throw Error('Secure output storage did not confirm persistence');
+   const result={step:index+1,agentRole,status:'passed',outputSha256,outputLength:output.answer.length,modelReported:typeof output.model==='string'?output.model.slice(0,128):'unknown',humanReviewRequired:true};
    steps.push(result);
    await onEvent({taskId,agentId,status:'passed'});
   }catch{
@@ -42,5 +49,5 @@ export async function executeApprovedWorkOrder({workOrder,roles,approval,env=pro
    break;
   }
  }
- return {schemaVersion:1,kind:'hak-approved-agent-execution',workOrderId:order.id,projectId:order.projectId,approvalRecorded:true,approvedBy:approval.approvedBy,steps,completed:!failed&&steps.length===proposal.roles.length,executionAttempted:true,providerIdentityVerified:false,outputReviewed:false,readyForProduction:false,limitations:['Approval assertion is supplied by caller; identity is not independently authenticated','Output hashes are not independent provider traces','No changes are applied or merged; human review and CI remain mandatory']};
+ return {schemaVersion:1,kind:'hak-approved-agent-execution',workOrderId:order.id,projectId:order.projectId,approvalRecorded:true,approvalVerified:true,outputsPersisted:!failed,approvedBy:approval.approvedBy,steps,completed:!failed&&steps.length===proposal.roles.length,executionAttempted:true,providerIdentityVerified:false,outputReviewed:false,readyForProduction:false,limitations:['Caller-provided verifier must authenticate approval against a trusted authority; engine cannot independently attest verifier integrity','Output hashes are not independent provider traces','No changes are applied or merged; human review and CI remain mandatory']};
 }
