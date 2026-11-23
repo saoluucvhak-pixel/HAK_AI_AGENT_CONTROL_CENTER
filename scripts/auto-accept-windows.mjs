@@ -92,6 +92,5 @@ try{
  const summary=lines.join('\n')+'\n';
  console.log(summary);
  try{await writeFile(join(root,'HAK_ACCEPTANCE_RESULT.txt'),summary,'utf8');console.log('Report: HAK_ACCEPTANCE_RESULT.txt')}catch{console.error('WARNING: Could not save report; on-screen results remain available')}
- console.log(JSON.stringify(report,null,2));
  if(!report.passed)process.exitCode=1;
 }
