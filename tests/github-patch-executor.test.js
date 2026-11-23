@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import {executeGithubPatchProposal} from '../src/github-patch-executor.js';
 const sha='a'.repeat(40),blob='b'.repeat(40),treeSha='c'.repeat(40),commitSha='d'.repeat(40);
 const proposal={repository:'HAK_AI_SKILLS',runId:7,baseSha:sha,rationale:'Fix failing deterministic CI test',changes:[{path:'tests/example.test.js',expectedBlobSha:blob,newContent:'assert.ok(true);'},{path:'src/example.js',expectedBlobSha:blob,newContent:'export const ok = true;'}]};
-function fake({mainSha=sha,fileSha=blob,prFails=false}={}){
+function fake({mainSha=sha,fileSha=blob,prFails=false,repoName='saoluucvhak-pixel/HAK_AI_SKILLS',defaultBranch='main',archived=false}={}){
  const calls=[];
  const fetchImpl=async(url,opts={})=>{
   const method=opts.method||'GET';const body=opts.body?JSON.parse(opts.body):null;calls.push({url,method,body});
   if(prFails&&url.endsWith('/pulls'))return {ok:false,status:422};
   let data;
   if(url.includes('/actions/runs/7'))data={id:7,head_sha:sha};
+  else if(url.endsWith('/HAK_AI_SKILLS'))data={full_name:repoName,default_branch:defaultBranch,archived};
   else if(url.includes('/git/ref/heads/main'))data={object:{sha:mainSha}};
   else if(url.includes('/git/ref/heads/hak-fix/'))data={object:{sha:commitSha}};
   else if(url.endsWith('/git/refs'))data={ref:'refs/heads/hak-fix/test'};
@@ -66,4 +67,12 @@ test('rejects unsafe branch names before GitHub access',async()=>{
  const x=fake();
  await assert.rejects(()=>executeGithubPatchProposal(proposal,{branch:'main',authorized:true,token:'fake',fetchImpl:x.fetchImpl}),/Invalid dedicated/);
  assert.equal(x.calls.length,0);
+});
+
+test('blocks wrong repository identity or default branch before any write',async()=>{
+ for(const cfg of [{repoName:'other/HAK_AI_SKILLS'},{defaultBranch:'develop'},{archived:true}]){
+  const x=fake(cfg);
+  await assert.rejects(()=>executeGithubPatchProposal(proposal,{branch:'hak-fix/test',authorized:true,token:'fake',fetchImpl:x.fetchImpl}),/Repository identity/);
+  assert.equal(x.calls.some(c=>c.method!=='GET'),false);
+ }
 });
