@@ -38,7 +38,8 @@ export async function routeModel(task, {env=process.env,fetchImpl=fetch}={}) {
     const data=Buffer.concat(chunks.map(x=>Buffer.from(x)));
     try{result=JSON.parse(data.toString('utf8'))}catch{throw new Error('Malformed gateway response')}
   }else{
-    result=await response.json();
+    // A response without a readable byte stream cannot be size-verified safely.
+    throw new Error('Gateway response stream unavailable');
   }
   const answer=result?.choices?.[0]?.message?.content;
   if (typeof answer !== 'string'||answer.length>128000) throw new Error('Malformed gateway response');
