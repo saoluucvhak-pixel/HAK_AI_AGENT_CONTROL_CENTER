@@ -22,7 +22,19 @@ const observerToken=process.env.HAK_OBSERVER_TOKEN||randomBytes(32).toString('he
 const observerStore=new EventStore(process.env.HAK_EVENT_STORE_PATH||'./data/agent-events.jsonl');
 await observerStore.load();
 const observer=createObserverApi({token:observerToken,registry:observerStore,localReadOnly:true});
-let cache=null,cacheTime=0;
+let cache=null,cacheTime=0,cacheRefresh=null;
+const REPO_CACHE_MS=5*60*1000;
+async function cachedSnapshots(){
+ if(cache&&Date.now()-cacheTime<REPO_CACHE_MS)return cache;
+ if(cacheRefresh)return cacheRefresh;
+ cacheRefresh=snapshots().then(next=>{
+  const previous=new Map((cache||[]).filter(item=>!item.error).map(item=>[item.name,item]));
+  cache=next.map(item=>item.error&&previous.has(item.name)?{...previous.get(item.name),stale:true,refreshError:item.error}:item);
+  cacheTime=Date.now();
+  return cache;
+ }).finally(()=>{cacheRefresh=null});
+ return cacheRefresh;
+}
 export const server=createServer(async(req,res)=>{
  res.setHeader('Cache-Control','no-store');
  res.setHeader('X-Content-Type-Options','nosniff');
@@ -91,7 +103,7 @@ export const server=createServer(async(req,res)=>{
    res.end(path.endsWith('.mmd')?toMermaid(graph):JSON.stringify(graph));return;
   }
   if(path==='/api/repos'){
-   if(!cache||Date.now()-cacheTime>60000){cache=await snapshots();cacheTime=Date.now();}
+   await cachedSnapshots();
    res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({repos:cache,updatedAt:new Date(cacheTime).toISOString()}));return;
   }
   if(path==='/'||path==='/index.html'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(await readFile(htmlPath));return;}
