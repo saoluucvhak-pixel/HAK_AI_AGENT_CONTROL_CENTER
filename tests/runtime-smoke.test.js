@@ -6,9 +6,18 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {once} from 'node:events';
+import {createServer as createNetServer} from 'node:net';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const secret='test-only-token-12345678901234567890';
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function availablePort(){
+ const server=createNetServer();
+ server.listen(0,'127.0.0.1');
+ await once(server,'listening');
+ const port=server.address().port;
+ const closed=once(server,'close');server.close();await closed;
+ return port;
+}
 async function launch(port,path){
  const child=spawn(process.execPath,['src/server.js'],{cwd:root,env:{...process.env,PORT:String(port),HAK_OBSERVER_TOKEN:secret,HAK_EVENT_STORE_PATH:path},stdio:['ignore','pipe','pipe']});
  let output='';child.stderr.on('data',b=>output+=b.toString());
@@ -27,7 +36,7 @@ async function stop(child){
 test('real server: health, UI, auth, event persistence across restart, topology', {timeout:30000},async()=>{
  const dir=await mkdtemp(join(tmpdir(),'hak-smoke-'));
  const path=join(dir,'events.jsonl');
- const port=45000+Math.floor(Math.random()*10000);
+ const port=await availablePort();
  let process1,process2;
  try{
   const first=await launch(port,path);process1=first.child;
