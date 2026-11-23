@@ -1,6 +1,6 @@
 import {spawn,spawnSync} from 'node:child_process';
 import {createServer} from 'node:net';
-import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -86,6 +86,12 @@ try{
  await stop();
  if(dir)await rm(dir,{recursive:true,force:true}).catch(()=>{report.cleanupFailed=true;report.passed=false});
  report.completedAt=new Date().toISOString();
+ const lines=['HAK AUTOMATIC ACCEPTANCE','Date: '+report.completedAt,'Platform: '+report.platform,'Overall: '+(report.passed?'PASS':'FAIL'),'',...report.checks.map(x=>x.status+'  '+x.name),'','Isolated: YES','Live data changed: NO','External AI agents certified: NO','Production certified: NO'];
+ if(report.failure)lines.push('Failure: '+report.failure);
+ if(report.cleanupFailed)lines.push('WARNING: temporary test folder cleanup failed');
+ const summary=lines.join('\n')+'\n';
+ console.log(summary);
+ try{await writeFile(join(root,'HAK_ACCEPTANCE_RESULT.txt'),summary,'utf8');console.log('Report: HAK_ACCEPTANCE_RESULT.txt')}catch{console.error('WARNING: Could not save report; on-screen results remain available')}
  console.log(JSON.stringify(report,null,2));
  if(!report.passed)process.exitCode=1;
 }
