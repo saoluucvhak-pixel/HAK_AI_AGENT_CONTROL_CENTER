@@ -20,6 +20,7 @@
     "accept:packet": "node scripts/accept-packet.mjs",
     "accept:export": "node scripts/export-acceptance.mjs",
     "accept:verify": "node scripts/verify-acceptance-packet.mjs",
-    "accept:orca": "node scripts/accept-orca.mjs"
+    "accept:orca": "node scripts/accept-orca.mjs",
+    "accept:observer-backup": "node scripts/accept-observer-backup.mjs"
   }
 }
