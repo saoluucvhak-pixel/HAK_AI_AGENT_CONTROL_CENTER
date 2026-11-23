@@ -1,0 +1,58 @@
+name: GitHub Patch Live Acceptance (manual only)
+on:
+  workflow_dispatch:
+    inputs:
+      verified_ci_run_id:
+        description: "Completed CI run ID for current main SHA"
+        required: true
+        type: string
+      rationale:
+        description: "Human-reviewed reason for isolated fixture patch"
+        required: true
+        default: "Acceptance-only update to the isolated patch fixture"
+        type: string
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: github-patch-live-acceptance
+      cancel-in-progress: false
+    steps:
+      - name: Checkout exact main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare verified fixture-only proposal
+        env:
+          RUN_ID: ${{ inputs.verified_ci_run_id }}
+          RATIONALE: ${{ inputs.rationale }}
+        run: |
+          node --input-type=module <<'NODE'
+          import {execFileSync} from 'node:child_process';
+          import {writeFileSync} from 'node:fs';
+          const runId=Number(process.env.RUN_ID);
+          if(!Number.isSafeInteger(runId)||runId<1)throw new Error('Invalid CI run ID');
+          const baseSha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+          const expectedBlobSha=execFileSync('git',['rev-parse','HEAD:tests/fixtures/patch-acceptance.txt'],{encoding:'utf8'}).trim();
+          const rationale=process.env.RATIONALE;
+          const newContent='HAK GitHub Patch Executor isolated acceptance fixture v2\nVerified workflow dispatch: '+process.env.GITHUB_RUN_ID+'\n';
+          writeFileSync('proposal.json',JSON.stringify({repository:'HAK_AI_AGENT_CONTROL_CENTER',runId,baseSha,rationale,changes:[{path:'tests/fixtures/patch-acceptance.txt',expectedBlobSha,newContent}]},null,2));
+          NODE
+      - name: Run real executor and independently verify draft PR
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HAK_PATCH_ACCEPTANCE: I_ACKNOWLEDGE_GITHUB_WRITES
+        run: |
+          node scripts/accept-github-patch.mjs proposal.json "hak-fix/acceptance-${GITHUB_RUN_ID}"
+      - name: Remove proposal from workspace
+        if: always()
+        run: rm -f proposal.json
