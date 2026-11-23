@@ -4,7 +4,8 @@ const MAX_FILES=10;
 const MAX_BYTES=30000;
 const VALID_PATH=/^(?:src|tests|test|scripts)\/(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\.(?:js|mjs|cjs|ts|tsx|json)$/;
 export function safeSourcePath(path){
- if(typeof path!=='string'||path.length>240||!VALID_PATH.test(path)||path.split('/').includes('..')||path.split('/').includes('.'))throw new Error('Invalid source path');
+ if(typeof path!=='string'||path.length>240||!(VALID_PATH.test(path)||path==='tests/fixtures/patch-acceptance.txt')||path.split('/').includes('..')||path.split('/').includes('.'))throw new Error('Invalid source path');
+ if(path.endsWith('.txt')&&path!=='tests/fixtures/patch-acceptance.txt')throw new Error('Invalid source path');
  return path;
 }
 export async function githubSourceInspection(name,sha,paths,{fetchImpl=fetch,token=process.env.GITHUB_TOKEN}={}){
