@@ -16,6 +16,6 @@ test('failed npm check prevents local pass',async()=>{
 test('npm invocation is shell-free and allowlisted',()=>{
  let observed;
  runNpmScript('test',{platform:'win32',spawnImpl:(cmd,args,opts)=>{observed={cmd,args,opts};return {status:0}}});
- assert.equal(observed.cmd,'npm.cmd');assert.deepEqual(observed.args,['run','test']);assert.equal(observed.opts.shell,false);
+ assert.equal(observed.cmd,'cmd.exe');assert.deepEqual(observed.args,['/d','/s','/c','npm run test']);assert.equal(observed.opts.shell,false);
  assert.throws(()=>runNpmScript('install'),/Unsupported/);
 });
