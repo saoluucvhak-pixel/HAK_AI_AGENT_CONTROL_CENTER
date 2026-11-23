@@ -1,5 +1,8 @@
 import {createServer} from 'node:http';
-import {randomBytes} from 'node:crypto';
+import {randomBytes,timingSafeEqual} from 'node:crypto';
+import {mkdir,writeFile} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
+import {executeApprovedWorkOrder} from './agent-engine.js';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {snapshots,safeRepo} from './github.js';
@@ -23,6 +26,21 @@ const observerToken=process.env.HAK_OBSERVER_TOKEN||randomBytes(32).toString('he
 const observerStore=new EventStore(process.env.HAK_EVENT_STORE_PATH||'./data/agent-events.jsonl');
 await observerStore.load();
 const observer=createObserverApi({token:observerToken,registry:observerStore,localReadOnly:true});
+const operatorToken=randomBytes(32).toString('hex');
+const jobs=new Map();
+let activeJob=false;
+const jobDir=resolve(process.env.HAK_AGENT_OUTPUT_DIR||'./data/agent-results');
+function sendJson(res,status,body){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(body));}
+function authorized(req){
+ const candidate=req.headers['x-hak-operator-token'];
+ if(typeof candidate!=='string'||candidate.length!==operatorToken.length)return false;
+ return timingSafeEqual(Buffer.from(candidate),Buffer.from(operatorToken));
+}
+async function readBody(req){
+ let bytes=0;const parts=[];
+ for await(const part of req){bytes+=part.length;if(bytes>16000)throw Error('Request too large');parts.push(part);}
+ return JSON.parse(Buffer.concat(parts).toString('utf8'));
+}
 let cache=null,cacheTime=0;
 const getSnapshots=createSnapshotCache({load:snapshots});
 async function cachedSnapshots(){cache=await getSnapshots();cacheTime=Date.now();return cache;}
@@ -34,6 +52,51 @@ export const server=createServer(async(req,res)=>{
   const path=new URL(req.url||'/', 'http://localhost').pathname;
   if(path==='/api/agent-events'||path==='/api/agent-status'){
    await observer(req,res,path);return;
+  }
+  if(path==='/api/operator/session'&&req.method==='GET'){
+   sendJson(res,200,{token:operatorToken,enabled:process.env.HAK_AGENT_EXECUTION_ENABLED==='true'&&process.env.HAK_OMNIROUTE_ENABLED==='true',notice:'Local-only session; never share this token'});return;
+  }
+  if(path==='/api/operator/jobs'&&req.method==='GET'){
+   sendJson(res,200,{jobs:[...jobs.values()].map(({id,title,status,steps,error})=>({id,title,status,steps,error}))});return;
+  }
+  if(path==='/api/operator/jobs'&&req.method==='POST'){
+   const origin=req.headers.origin;
+   const expected='http://127.0.0.1:'+port;
+   if(origin!==expected||!authorized(req)){sendJson(res,403,{error:'Local operator session required'});return;}
+   if(activeJob){sendJson(res,409,{error:'Another agent job is running'});return;}
+   if(process.env.HAK_AGENT_EXECUTION_ENABLED!=='true'||process.env.HAK_OMNIROUTE_ENABLED!=='true'){
+    sendJson(res,503,{error:'AI is not configured. Enable local OmniRoute and explicit execution first.'});return;
+   }
+   let body;
+   try{body=await readBody(req);if(!body||typeof body!=='object'||Array.isArray(body))throw Error('Invalid body');
+    if(typeof body.title!=='string'||!body.title.trim()||body.title.length>160||
+       typeof body.description!=='string'||!body.description.trim()||body.description.length>4000||
+       !['architecture','ui','backend','data','security','testing','quality','ocr'].includes(body.role)||
+       body.confirm!==true)throw Error('Invalid or unconfirmed task');
+   }catch{sendJson(res,400,{error:'Invalid task or missing confirmation'});return;}
+   const id=randomBytes(12).toString('hex');
+   const job={id,title:body.title.trim(),status:'running',steps:[],error:null};
+   jobs.set(id,job);activeJob=true;
+   sendJson(res,202,{id,status:'running'});
+   void (async()=>{
+    try{
+     const result=await executeApprovedWorkOrder({
+      workOrder:{id,projectId:'HAK',title:job.title,description:body.description,acceptanceCriteria:['Return a reviewable proposal']},
+      roles:[body.role],
+      approval:{approved:true,workOrderId:id,approvedBy:'local-operator',reason:'Explicit confirmed local UI action'},
+      verifyApproval:async({approval})=>approval.workOrderId===id&&approval.approved===true,
+      saveOutput:async({taskId,content})=>{
+       await mkdir(jobDir,{recursive:true,mode:0o700});
+       await writeFile(join(jobDir,id+'.txt'),content,{flag:'wx',mode:0o600});
+       return true;
+      },
+      onEvent:async(event)=>{job.status=event.status;},
+     });
+     job.steps=result.steps;job.status=result.completed?'completed':'failed';
+    }catch{job.status='failed';job.error='Execution failed; check local configuration privately';}
+    finally{activeJob=false;}
+   })();
+   return;
   }
   if(req.method!=='GET'){res.writeHead(405);res.end('Method Not Allowed');return;}
   if(path==='/api/github/pr-evidence'){
