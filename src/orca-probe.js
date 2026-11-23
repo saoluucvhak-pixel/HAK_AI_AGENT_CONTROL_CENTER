@@ -23,7 +23,9 @@ export function probeOrca({enabled=false,run=spawnSync,env=process.env}={}) {
   try {
     const data=JSON.parse(result.stdout);
     if (!data || typeof data!=='object' || Array.isArray(data)) throw Error('invalid');
-    return {status:'reachable',connected:true};
+    const connected=data.connected===true || data.ready===true;
+    if(data.connected===false || data.ready===false) return {status:'disconnected',connected:false};
+    return connected?{status:'reachable',connected:true}:{status:'unverified',connected:false};
   } catch {
     return {status:'invalid-response',connected:false};
   }
