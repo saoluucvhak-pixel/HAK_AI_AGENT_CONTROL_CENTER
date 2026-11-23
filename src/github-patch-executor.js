@@ -48,6 +48,8 @@ export async function executeGithubPatchProposal(proposal,{branch,authorized=fal
  await request('/git/refs','POST',{ref:'refs/heads/'+branch,sha:commit.sha});
  const branchRef=await request('/git/ref/heads/'+branch);
  if(branchRef?.object?.sha!==commit.sha)throw new Error('Dedicated branch SHA mismatch; manual recovery required');
+ const publishedBase=await request('/git/ref/heads/main');
+ if(publishedBase?.object?.sha!==p.baseSha)throw new Error('Default branch advanced after fix branch publication; branch requires manual recovery; no PR created');
  // Draft PR: never auto-merge; on PR failure branch remains available for recovery.
  let pr;
  try{

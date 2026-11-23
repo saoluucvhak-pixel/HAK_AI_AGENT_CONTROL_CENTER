@@ -91,3 +91,17 @@ test('rejects symlinks, tree mismatch and truncated trees before publishing',asy
   assert.equal(x.calls.some(c=>c.url.endsWith('/git/refs')&&c.method==='POST'),false);
  }
 });
+
+test('main advances after fix branch publication: no draft PR is created',async()=>{
+ const x=fake();let mainReads=0;
+ const fetchImpl=async(url,opts)=>{
+  if(url.includes('/git/ref/heads/main')){
+   mainReads++;
+   if(mainReads===3)return {ok:true,json:async()=>({object:{sha:'e'.repeat(40)}})};
+  }
+  return x.fetchImpl(url,opts);
+ };
+ await assert.rejects(()=>executeGithubPatchProposal(proposal,{branch:'hak-fix/test',authorized:true,token:'fake',fetchImpl}),/advanced after fix branch publication/);
+ assert.equal(x.calls.some(c=>c.url.endsWith('/git/refs')&&c.method==='POST'),true);
+ assert.equal(x.calls.some(c=>c.url.endsWith('/pulls')),false);
+});
