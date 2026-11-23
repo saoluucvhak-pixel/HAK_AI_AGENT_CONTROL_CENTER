@@ -39,3 +39,6 @@ Run `npm run drill:observer -- <backup-path> <sha256>` after creating and verify
 
 ## One-command local acceptance baseline
 On an operator-approved Windows computer, from the checked-out repository root run `npm run accept:local`. It runs `npm run check`, `npm test` and existing loopback-only connectivity probes; prints a sanitized JSON summary with no command stdout/stderr or credentials; and exits nonzero if Node 22+, syntax checks or unit tests fail. Keep provider keys only in private local environment variables. This command **does not start agents**, execute paid provider requests, or certify production readiness. Compare the output with Issue #32 and perform the real provider/desktop acceptance steps separately.
+
+## Sanitized acceptance packet for Issue #32
+Run `npm run accept:packet` on the approved Windows workstation. The command performs the same local syntax/unit/connectivity checks and prints a structured, sanitized packet with the seven remaining independent acceptance gates marked `missing`. Copy the output to a private review channel if needed. The SHA-256 is an integrity identifier, not a digital signature or evidence of execution. Provider traces and reviewer sign-off must be collected separately; this command cannot mark any gate `passed` and always returns `readyForProduction:false`.
