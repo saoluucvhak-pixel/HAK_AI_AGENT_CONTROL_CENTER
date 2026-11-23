@@ -9,7 +9,7 @@ function fake({mainSha=sha,fileSha=blob,prFails=false,repoName='saoluucvhak-pixe
   const method=opts.method||'GET';const body=opts.body?JSON.parse(opts.body):null;calls.push({url,method,body});
   if(prFails&&url.endsWith('/pulls'))return {ok:false,status:422};
   let data;
-  if(url.includes('/actions/runs/7'))data={id:7,head_sha:sha};
+  if(url.includes('/actions/runs/7'))data={id:7,head_sha:sha,status:'completed',conclusion:'success'};
   else if(url.endsWith('/HAK_AI_SKILLS'))data={full_name:repoName,default_branch:defaultBranch,archived};
   else if(url.includes('/git/ref/heads/main'))data={object:{sha:mainSha}};
   else if(url.includes('/git/ref/heads/hak-fix/'))data={object:{sha:commitSha}};
