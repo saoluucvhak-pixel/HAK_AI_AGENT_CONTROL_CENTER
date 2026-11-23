@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {executeGithubPatchProposal} from '../src/github-patch-executor.js';
 const sha='a'.repeat(40),blob='b'.repeat(40),treeSha='c'.repeat(40),commitSha='d'.repeat(40);
 const proposal={repository:'HAK_AI_SKILLS',runId:7,baseSha:sha,rationale:'Fix failing deterministic CI test',changes:[{path:'tests/example.test.js',expectedBlobSha:blob,newContent:'assert.ok(true);'},{path:'src/example.js',expectedBlobSha:blob,newContent:'export const ok = true;'}]};
-function fake({mainSha=sha,fileSha=blob,prFails=false,repoName='saoluucvhak-pixel/HAK_AI_SKILLS',defaultBranch='main',archived=false}={}){
+function fake({mainSha=sha,fileSha=blob,prFails=false,repoName='saoluucvhak-pixel/HAK_AI_SKILLS',defaultBranch='main',archived=false,fileMode='100644',truncated=false}={}){
  const calls=[];
  const fetchImpl=async(url,opts={})=>{
   const method=opts.method||'GET';const body=opts.body?JSON.parse(opts.body):null;calls.push({url,method,body});
@@ -15,6 +15,7 @@ function fake({mainSha=sha,fileSha=blob,prFails=false,repoName='saoluucvhak-pixe
   else if(url.includes('/git/ref/heads/hak-fix/'))data={object:{sha:commitSha}};
   else if(url.endsWith('/git/refs'))data={ref:'refs/heads/hak-fix/test'};
   else if(url.endsWith('/git/trees'))data={sha:treeSha};
+  else if(url.includes('/git/trees/')&&method==='GET')data={truncated,tree:proposal.changes.map(c=>({path:c.path,type:'blob',mode:fileMode,sha:fileSha}))};
   else if(url.endsWith('/git/commits')&&method==='POST')data={sha:commitSha};
   else if(url.includes('/git/commits/'))data={tree:{sha:treeSha}};
   else if(url.includes('/contents/'))data={type:'file',encoding:'base64',size:4,sha:fileSha,content:Buffer.from('test').toString('base64')};
@@ -74,5 +75,19 @@ test('blocks wrong repository identity or default branch before any write',async
   const x=fake(cfg);
   await assert.rejects(()=>executeGithubPatchProposal(proposal,{branch:'hak-fix/test',authorized:true,token:'fake',fetchImpl:x.fetchImpl}),/Repository identity/);
   assert.equal(x.calls.some(c=>c.method!=='GET'),false);
+ }
+});
+
+test('preserves executable bit when publishing a multi-file patch',async()=>{
+ const x=fake({fileMode:'100755'});
+ await executeGithubPatchProposal(proposal,{branch:'hak-fix/test',authorized:true,token:'fake',fetchImpl:x.fetchImpl});
+ const tree=x.calls.find(c=>c.url.endsWith('/git/trees')&&c.method==='POST');
+ assert.deepEqual(tree.body.tree.map(e=>e.mode),['100755','100755']);
+});
+test('rejects symlinks, tree mismatch and truncated trees before publishing',async()=>{
+ for(const cfg of [{fileMode:'120000'},{fileSha:'e'.repeat(40)},{truncated:true}]){
+  const x=fake(cfg);
+  await assert.rejects(()=>executeGithubPatchProposal(proposal,{branch:'hak-fix/test',authorized:true,token:'fake',fetchImpl:x.fetchImpl}));
+  assert.equal(x.calls.some(c=>c.url.endsWith('/git/refs')&&c.method==='POST'),false);
  }
 });
