@@ -23,15 +23,18 @@ export async function routeModel(task, {env=process.env,fetchImpl=fetch}={}) {
   let result;
   if(response.body&&typeof response.body.getReader==='function'){
     const reader=response.body.getReader();
-    const chunks=[];let size=0;
+    const chunks=[];let size=0;let complete=false;
     try{
       while(true){
-        const {done,value}=await reader.read();if(done)break;
+        const {done,value}=await reader.read();if(done){complete=true;break;}
         size+=value.byteLength;
         if(size>maxBytes)throw new Error('Gateway response exceeds size limit');
         chunks.push(value);
       }
-    }finally{reader.releaseLock()}
+    }finally{
+      if(!complete){try{await reader.cancel()}catch{/* Preserve original gateway error */}}
+      reader.releaseLock();
+    }
     const data=Buffer.concat(chunks.map(x=>Buffer.from(x)));
     try{result=JSON.parse(data.toString('utf8'))}catch{throw new Error('Malformed gateway response')}
   }else{
