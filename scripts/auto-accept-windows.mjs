@@ -57,18 +57,27 @@ try{
  add('Authenticated event write',sent.status===201);
  const status=await fetch(base+'/api/agent-status').then(r=>r.json());
  add('Observer JSONL active',status.persistent===true&&status.tasks.some(t=>t.taskId===taskId));
+ const agentTaskId='HAK-AGENT-REHEARSAL-'+randomBytes(6).toString('hex');
+ for(const phase of ['queued','running','passed']){
+  const response=await fetch(base+'/api/agent-events',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({taskId:agentTaskId,agentId:'simulated-agent',status:phase})});
+  add('Simulated agent '+phase,response.status===201);
+ }
+ const invalid=await fetch(base+'/api/agent-events',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({taskId:agentTaskId,agentId:'simulated-agent',status:'unknown'})});
+ add('Invalid agent status rejected',invalid.status===400);
+ const lifecycle=await fetch(base+'/api/agent-status').then(r=>r.json());
+ add('Latest simulated agent state',lifecycle.tasks.some(t=>t.taskId===agentTaskId&&t.status==='passed'));
  await stop();
  const stored=new EventStore(storePath);await stored.load();
- add('Event persisted to disk',stored.summary().some(t=>t.taskId===taskId));
+ add('Event persisted to disk',stored.list().length===4&&stored.summary().some(t=>t.taskId===taskId)&&stored.summary().some(t=>t.taskId===agentTaskId&&t.status==='passed'));
  await start(port,token,storePath);
  const replay=await fetch(base+'/api/agent-status').then(r=>r.json());
- add('Observer survives server restart',replay.tasks.some(t=>t.taskId===taskId));
+ add('Observer survives server restart',replay.tasks.some(t=>t.taskId===taskId)&&replay.tasks.some(t=>t.taskId===agentTaskId&&t.status==='passed'));
  await stop();
  const backup=await backupObserver({source:storePath,destination:backupPath});
  const verified=await verifyObserverBackup({path:backupPath,expectedSha256:backup.sha256});
- add('Backup SHA256 verified',verified.valid===true&&verified.eventCount===1);
+ add('Backup SHA256 verified',verified.valid===true&&verified.eventCount===4);
  const drill=await drillObserverRestore({backupPath,sha256:backup.sha256});
- add('Restore drill',drill.passed===true&&drill.taskCount===1&&drill.liveStoreModified===false);
+ add('Restore drill',drill.passed===true&&drill.taskCount===2&&drill.liveStoreModified===false);
  report.passed=true;
 }catch(e){
  report.passed=false;
