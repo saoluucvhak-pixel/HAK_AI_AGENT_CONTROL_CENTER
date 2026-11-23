@@ -28,3 +28,22 @@ test('403 without exhausted quota remains a permission/HTTP failure',async()=>{
  const fake=async()=>({ok:false,status:403,headers:{get:()=> '42'}});
  await assert.rejects(()=>githubSnapshot('HAK_AI_SKILLS',{fetchImpl:fake,token:''}),/GitHub HTTP 403/);
 });
+
+test('quota exhaustion triggers cooldown and avoids repeated API calls',async()=>{
+ let calls=0,time=100;
+ const cache=createSnapshotCache({now:()=>time,ttlMs:10,quotaCooldownMs:900000,load:async()=>{
+  calls++;
+  return calls===1?[{name:'HAK_AI_SKILLS',openPullRequests:2}]:[{name:'HAK_AI_SKILLS',error:'GitHub API rate limit exhausted (HTTP 403)'}];
+ }});
+ await cache();time=111;
+ const [row]=await cache();
+ assert.equal(row.stale,true);
+ assert.equal(calls,2);
+ time=500000;
+ const [stale]=await cache();
+ assert.equal(stale.openPullRequests,2);
+ assert.equal(calls,2);
+ time=900112;
+ await cache();
+ assert.equal(calls,3);
+});
