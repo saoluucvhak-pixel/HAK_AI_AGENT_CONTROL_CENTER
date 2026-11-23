@@ -51,8 +51,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           HAK_PATCH_ACCEPTANCE: I_ACKNOWLEDGE_GITHUB_WRITES
+          HAK_PATCH_EVIDENCE_FILE: acceptance-evidence.json
         run: |
           node scripts/accept-github-patch.mjs proposal.json "hak-fix/acceptance-${GITHUB_RUN_ID}"
+      - name: Publish acceptance evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-patch-live-acceptance-evidence
+          path: acceptance-evidence.json
+          retention-days: 30
       - name: Remove proposal from workspace
         if: always()
-        run: rm -f proposal.json
+        run: rm -f proposal.json acceptance-evidence.json
