@@ -28,6 +28,8 @@ jobs:
         run: node scripts/accept-windows-smoke.mjs
       - name: Verify synthetic Observer backup, SHA256 and restore replay
         run: npm run accept:observer-backup
+      - name: Run isolated one-click acceptance (including restart and backup)
+        run: npm run accept:auto
       - name: Generate diagnostic acceptance packet (not production approval)
         shell: bash
         run: node scripts/accept-packet.mjs > acceptance-packet.json
