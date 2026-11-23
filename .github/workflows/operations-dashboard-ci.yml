@@ -25,10 +25,15 @@ jobs:
       - name: Generate diagnostic acceptance packet (not production approval)
         shell: bash
         run: npm run accept:packet > acceptance-packet.json
+      - name: Verify diagnostic packet integrity
+        shell: bash
+        run: npm run accept:verify -- acceptance-packet.json > acceptance-verification.json
       - name: Upload OS-specific diagnostic evidence
         uses: actions/upload-artifact@v4
         with:
           name: hak-diagnostic-${{ matrix.os }}-node${{ matrix.node }}
-          path: acceptance-packet.json
+          path: |
+            acceptance-packet.json
+            acceptance-verification.json
           if-no-files-found: error
           retention-days: 30
