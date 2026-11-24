@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {prepareRepoWorkflow,extractPatchProposalFromText} from '../src/orchestrator.js';
+import {prepareRepoWorkflow,extractPatchProposalFromText,buildSessionMissionPrompt} from '../src/orchestrator.js';
 import {executeApprovedWorkOrder} from '../src/agent-engine.js';
 
 test('prepareRepoWorkflow + executeApprovedWorkOrder injects skill context and audits appliedSkills',async()=>{
@@ -172,4 +172,18 @@ test('prepareRepoWorkflow supports security-audit workflowMode combining cloudfl
  });
  assert.deepEqual(wf.recommendedRoles,['security','testing','backend','quality']);
  assert.deepEqual(wf.skills.map(s=>s.name).sort(),['fix-finding','security-audit']);
+ assert.match(wf.missionPrompt,/\[HAK_CONTROL_SESSION_MISSION\]/);
+ assert.match(wf.missionPrompt,/any-client\/new-project/);
+});
+
+test('buildSessionMissionPrompt produces 5-phase single-prompt mission for current AI session',()=>{
+ const prompt=buildSessionMissionPrompt({
+  targetRepo:'saoluucvhak-pixel/HAK_VC_HHH',
+  goal:'Test và sửa lỗi toàn bộ repo',
+  workflowMode:'fix-and-verify',
+  skills:[{name:'systematic-debugging'},{name:'test-driven-development'}]
+ });
+ assert.match(prompt,/saoluucvhak-pixel\/HAK_VC_HHH/);
+ assert.match(prompt,/systematic-debugging, test-driven-development/);
+ assert.match(prompt,/5\. Ship:/);
 });
