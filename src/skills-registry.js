@@ -7,9 +7,9 @@ const MAX_SKILL_BYTES=32768;
 const SKILL_NAME=/^[a-z0-9][a-z0-9-]{0,79}$/;
 
 const ROLE_SKILL_HINTS={
- architecture:['hak-archify-architecture','archify','security-audit','hak-code-auditor'],
+ architecture:['hak-archify-architecture','archify','security-audit','find-skills','hak-code-auditor'],
  ui:['agent-browser','hak-ui-designer','hak-ui-ux-pro-max','hak-vercel-web-design','hak-unslop-design'],
- backend:['fix-finding','security-diff-scan','hak-code-auditor','hak-data-integrity','hak-migration-manager'],
+ backend:['fix-finding','security-diff-scan','find-skills','hak-code-auditor','hak-data-integrity','hak-migration-manager'],
  data:['hak-parent-child-data-model','hak-data-integrity','hak-smart-filter'],
  security:['security-audit','security-scan','triage-finding','check-skills','hak-electron-security','hak-code-auditor'],
  testing:['agent-browser','triage-finding','verify-fix','security-audit','hak-code-auditor','hak-payroll-validator'],
