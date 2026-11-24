@@ -14,7 +14,11 @@ function Install($exe,$extra=@()) {
   $p = Start-Process -FilePath $exe -ArgumentList (@('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS=desktopicon',"/DIR=$installDir","/LOG=$installDir.log")+$extra) -Wait -PassThru
   return $p.ExitCode
 }
-function StartHak { Start-Process -FilePath 'wscript.exe' -ArgumentList "`"$installDir\HAK_AI_AGENT.vbs`"" -Wait }
+# -Wait would also wait for descendants (the detached backend never exits); wait only for wscript itself.
+function StartHak {
+  $p = Start-Process -FilePath 'wscript.exe' -ArgumentList "`"$installDir\HAK_AI_AGENT.vbs`"" -PassThru
+  if (-not $p.WaitForExit(90000)) { throw 'launcher did not return within 90s' }
+}
 function WaitHealth { for($i=0;$i -lt 60;$i++){ try { return Invoke-RestMethod "http://127.0.0.1:$port/api/health" -TimeoutSec 2 } catch { Start-Sleep -Milliseconds 500 } }; return $null }
 function StopHak { & "$installDir\runtime\node.exe" "$installDir\scripts\stop.mjs" | Out-Null; Start-Sleep -Seconds 2 }
 function Desktop { [Environment]::GetFolderPath('Desktop') }
