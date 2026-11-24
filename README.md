@@ -17,3 +17,7 @@ After pulling the latest `main`, double-click `HAK_ACCEPT_WINDOWS.cmd` to run lo
 4. Refresh the job list and choose **Xem kết quả AI**. Job metadata and outputs are stored under `data/agent-results` and restored on restart.
 
 This MVP requires a working gateway; it does not automatically install Claude, Gemini or OmniRoute, and it does not modify code or merge PRs. AI output is a proposal requiring human review. Do not use it for sensitive documents without an approved provider/data policy. If HAK is already running, close its existing process before restarting with new settings.
+
+## One-click live AI gateway acceptance on Windows
+
+After running `HAK_CONFIG_AI_WINDOWS.cmd` and starting your local OmniRoute gateway, double-click `HAK_TEST_AI_WINDOWS.cmd`. This sends **one harmless challenge prompt** through the configured provider and reports PASS/FAIL without displaying the API key or prompt response. A PASS verifies only that the configured gateway returned the expected response; it does **not** establish the upstream model's identity, billing, security posture, or production readiness. If PASS, restart `HAK_START_WINDOWS.cmd` and submit one non-sensitive operator job in the Dashboard to finish the manual acceptance.
