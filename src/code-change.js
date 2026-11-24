@@ -54,6 +54,10 @@ export class CodeChangeService{
   if(root===this.#dataDirRoot()||root.startsWith(this.#dataDirRoot()+sep))throw new CodeChangeError('INVALID','Không được dùng thư mục dữ liệu của HAK làm repository');
   if(githubRepo!==null&&(typeof githubRepo!=='string'||!SLUG.test(githubRepo)))throw new CodeChangeError('INVALID','Repository GitHub phải có dạng owner/name');
   if(!VERIFY_IDS.includes(defaultVerify))throw new CodeChangeError('INVALID','Lệnh kiểm thử mặc định phải là một trong: '+VERIFY_IDS.join(', '));
+  if(githubRepo!==null){
+   const probe=await this.#ws.remoteTarget(root);
+   if(probe.slug!==githubRepo.toLowerCase())throw new CodeChangeError('REMOTE_MISMATCH','Remote origin của repository ('+(probe.url||'không có')+') không khớp '+githubRepo+'. Sửa remote hoặc khai báo đúng owner/name.');
+  }
   const info=await this.#ws.inspectRepo(root).catch(e=>{throw new CodeChangeError(e.code||'INVALID',e.message);});
   await this.#ws.resolveBase(info.root,defaultBranch).catch(e=>{throw new CodeChangeError('INVALID',e.message);});
   const repo={id:randomBytes(8).toString('hex'),name:name.trim(),path:info.root,githubRepo,defaultBranch,defaultVerify,createdAt:new Date(this.#now()).toISOString()};
@@ -65,8 +69,8 @@ export class CodeChangeService{
  #get(id){const c=this.#items.get(id);if(!c)throw new CodeChangeError('NOT_FOUND','Không tìm thấy thay đổi mã');return c;}
  get(id){return structuredClone(this.#get(id));}
  list(){return [...this.#items.values()].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(c=>({id:c.id,orderId:c.orderId,repoId:c.repoId,status:c.status,branch:c.branch,updatedAt:c.updatedAt}));}
- #gate1(cc){return {codeChangeId:cc.id,orderId:cc.orderId,aggregateSha256:cc.aggregateSha256,repoId:cc.repoId,repoPath:cc.repoPath,baseSha:cc.baseSha,branch:cc.branch,scope:cc.scope,verifyCommand:cc.verifyCommand,maxRepairs:cc.maxRepairs,agent:cc.agent,consentExecuteCode:true};}
- #gate2(cc){return {codeChangeId:cc.id,commitSha:cc.headSha,branch:cc.branch,repoId:cc.repoId,githubRepo:cc.githubRepo,baseSha:cc.baseSha};}
+ #gate1(cc){return {codeChangeId:cc.id,orderId:cc.orderId,aggregateSha256:cc.aggregateSha256,repoId:cc.repoId,repoPath:cc.repoPath,baseSha:cc.baseSha,baseRef:cc.baseRef,branch:cc.branch,scope:cc.scope,verifyCommand:cc.verifyCommand,maxRepairs:cc.maxRepairs,agent:cc.agent,consentExecuteCode:true};}
+ #gate2(cc){return {codeChangeId:cc.id,commitSha:cc.headSha,branch:cc.branch,repoId:cc.repoId,githubRepo:cc.githubRepo,baseSha:cc.baseSha,remote:cc.remote};}
  async create({orderId,repoId,scope,verifyCommand:vc,maxRepairs=2,agent='backend',consentExecuteCode},actor='local-operator'){
   const order=this.#orch.get(orderId);
   if(order.status!=='COMPLETED'||!order.result)throw new CodeChangeError('BAD_STATE','Work Order phải hoàn thành (có báo cáo tổng hợp) trước khi tạo thay đổi mã');
@@ -76,9 +80,12 @@ export class CodeChangeService{
   if(!Array.isArray(scope)||scope.length<1||scope.length>30||scope.some(p=>typeof p!=='string'||!p.trim()||p.length>200||p.includes('..')||/^([a-zA-Z]:|[\\/])/.test(p)))throw new CodeChangeError('INVALID','Phạm vi được phép sửa là bắt buộc (1–30 mẫu, không tuyệt đối, không "..")');
   if(!VERIFY_IDS.includes(vc))throw new CodeChangeError('INVALID','Lệnh kiểm thử phải là một trong: '+VERIFY_IDS.join(', '));
   if(!Number.isInteger(maxRepairs)||maxRepairs<0||maxRepairs>3)throw new CodeChangeError('INVALID','Số lần sửa lại phải từ 0 đến 3');
-  const baseSha=await this.#ws.resolveBase(repo.path,repo.defaultBranch);
+  const fetched=await this.#ws.fetchRemote(repo.path,repo.defaultBranch);
+  const baseRef=fetched.ok?'origin/'+repo.defaultBranch:repo.defaultBranch;
+  const baseSha=await this.#ws.resolveBase(repo.path,baseRef);
+  const remote=(await this.#ws.remoteTarget(repo.path)).url;
   const id=randomBytes(8).toString('hex');
-  const cc={schemaVersion:1,id,orderId,repoId,repoPath:repo.path,githubRepo:repo.githubRepo,defaultBranch:repo.defaultBranch,baseSha,branch:'hak/'+orderId.slice(0,8)+'-'+randomBytes(2).toString('hex'),scope:scope.map(s=>s.trim()),verifyCommand:vc,maxRepairs,agent,
+  const cc={schemaVersion:1,id,orderId,repoId,repoPath:repo.path,githubRepo:repo.githubRepo,defaultBranch:repo.defaultBranch,baseSha,baseRef,baseSource:fetched.ok?'remote':'local',baseNote:fetched.ok?null:(fetched.reason==='no-remote'?'Repository không có remote origin: nền là nhánh cục bộ':'Không fetch được remote ('+(fetched.detail||fetched.reason)+'): nền là nhánh cục bộ, có thể cũ so với remote'),remote,runs:0,branch:'hak/'+orderId.slice(0,8)+'-'+randomBytes(2).toString('hex'),scope:scope.map(s=>s.trim()),verifyCommand:vc,maxRepairs,agent,
    aggregateSha256:order.result.aggregateSha256,projectId:order.projectId,status:'AWAITING_APPROVAL',approvalId:null,publishApprovalId:null,attempts:[],headSha:null,pr:null,error:null,createdBy:actor,createdAt:new Date(this.#now()).toISOString(),transitions:[]};
   cc.transitions.push({at:cc.createdAt,from:null,to:'AWAITING_APPROVAL',actor,reason:'Tạo thay đổi mã; chờ phê duyệt phạm vi và đồng ý chạy mã'});
   this.#items.set(id,cc);await this.#save(cc);return structuredClone(cc);
@@ -96,12 +103,14 @@ export class CodeChangeService{
   if(cc.status==='INTERRUPTED'&&!rerunInterrupted)throw new CodeChangeError('CONFIRM_RERUN','Lần chạy trước bị gián đoạn khi đang gọi AI. Chạy lại có thể tính phí lần nữa; xác nhận để tiếp tục.');
   const v=this.#approvals.verify({approvalId:cc.approvalId,workOrderId:gate(id),projectId:cc.projectId,scope:this.#gate1(cc)});
   if(!v.valid)throw new CodeChangeError('NOT_APPROVED','Phê duyệt không hợp lệ ('+v.reason+'). Cần phê duyệt lại.');
-  const head=await this.#ws.resolveBase(cc.repoPath,cc.defaultBranch);
-  if(head!==cc.baseSha){this.#log(cc,'BLOCKED',actor,'Nhánh '+cc.defaultBranch+' đã tiến tới '+head.slice(0,8)+'; cần tạo thay đổi mã mới');await this.#save(cc);throw new CodeChangeError('BASE_MOVED','Nhánh gốc đã thay đổi so với lúc phê duyệt; tạo thay đổi mã mới và phê duyệt lại.');}
+  if(cc.baseSource==='remote')await this.#ws.fetchRemote(cc.repoPath,cc.defaultBranch);
+  const head=await this.#ws.resolveBase(cc.repoPath,cc.baseRef||cc.defaultBranch);
+  if(head!==cc.baseSha){this.#log(cc,'BLOCKED',actor,'Nền '+(cc.baseRef||cc.defaultBranch)+' đã tiến tới '+head.slice(0,8)+'; cần tạo thay đổi mã mới');await this.#save(cc);throw new CodeChangeError('BASE_MOVED','Nhánh gốc đã thay đổi so với lúc phê duyệt; tạo thay đổi mã mới và phê duyệt lại.');}
   verifyCommand(cc.verifyCommand);
   await this.#approvals.markUsed(v.record.id);
   cc.attempts=cc.status==='AWAITING_APPROVAL'?cc.attempts:[];
-  this.#log(cc,'RUNNING',actor,'Bắt đầu');cc.error=null;await this.#save(cc);
+  cc.runs=(cc.runs||0)+1;
+  this.#log(cc,'RUNNING',actor,cc.runs>1?'Chạy lại (đặt lại nhánh làm việc chưa xuất bản)':'Bắt đầu');cc.error=null;await this.#save(cc);
   const ctrl=new AbortController();
   const run=this.#execute(cc,ctrl).finally(()=>this.#runs.delete(id));
   this.#runs.set(id,{ctrl,run});
@@ -131,7 +140,7 @@ export class CodeChangeService{
    const order=this.#orch.get(cc.orderId);
    const aggregate=fence((await this.#orch.getAggregate(cc.orderId)).slice(0,MAX_AGG));
    const context=await this.#context(cc);
-   const wt=await this.#ws.create({id:cc.id,repoPath:cc.repoPath,baseSha:cc.baseSha,branch:cc.branch});
+   const wt=await this.#ws.create({id:cc.id,repoPath:cc.repoPath,baseSha:cc.baseSha,branch:cc.branch,reset:cc.runs>1});
    let feedback=null;
    for(let n=1;n<=cc.maxRepairs+1;n++){
     if(signal.aborted)throw new CodeChangeError('CANCELLED','Đã hủy');
@@ -189,7 +198,10 @@ export class CodeChangeService{
   if(head!==cc.headSha)throw new CodeChangeError('NOT_APPROVED','Commit trong workspace khác commit đã kiểm thử; không xuất bản');
   const v=this.#approvals.verify({approvalId:cc.publishApprovalId,workOrderId:gate(id)+':publish',projectId:cc.projectId,scope:this.#gate2({...cc,headSha:head})});
   if(!v.valid)throw new CodeChangeError('NOT_APPROVED','Chưa có phê duyệt xuất bản hợp lệ cho đúng commit này ('+v.reason+')');
-  const token=await this.#secrets.get('github:token').catch(()=>null);
+  const tgt=await this.#ws.remoteTarget(cc.repoPath);
+  if(tgt.url!==cc.remote)throw new CodeChangeError('NOT_APPROVED','Remote đích đã đổi so với lúc phê duyệt; tạo thay đổi mã mới.');
+  if(cc.githubRepo&&tgt.slug!==cc.githubRepo.toLowerCase())throw new CodeChangeError('REMOTE_MISMATCH','Remote origin không khớp '+cc.githubRepo+'; không đẩy nhánh.');
+  const token=process.env.HAK_GITHUB_TOKEN||await this.#secrets.get('github:token').catch(()=>null);   // container/CI secret first, stored token as fallback
   try{await this.#ws.push(wt,{branch:cc.branch,token});}
   catch(e){cc.error={code:'PUSH',message:redact(e.message,[token||'']).slice(0,300),retryable:true};await this.#save(cc);throw new CodeChangeError('PUSH',cc.error.message);}
   await this.#approvals.markUsed(v.record.id);

@@ -22,8 +22,11 @@ export async function runStaticChecks(ws,repoPath,sha){
  const files=await ws.listAll(repoPath,sha);
  const paths=files.map(f=>f.path);
  const out=[];
+ const partial=[];
+ if(files.truncated)partial.push('danh sách tệp');
+ const grep=async(pattern,opts)=>{const h=await ws.grepAt(repoPath,sha,pattern,opts);if(h.truncated)partial.push('tìm kiếm "'+pattern.slice(0,24)+'…" (đầu ra git bị cắt)');else if(h.capped)partial.push('tìm kiếm "'+pattern.slice(0,24)+'…" (nhiều hơn '+opts.max+' vị trí, chỉ liệt kê '+opts.max+')');return h;};
  // 1. secrets
- for(const h of await ws.grepAt(repoPath,sha,SECRET_RE,{max:50})){
+ for(const h of await grep(SECRET_RE,{max:50})){
   if(/package-lock\.json$/.test(h.path))continue;
   out.push(finding('secret-scan','error',h.path,h.line,h.text,'Chuỗi giống khóa/bí mật được commit trong mã nguồn (giá trị đã bị ẩn trong báo cáo)'));
  }
@@ -56,17 +59,18 @@ export async function runStaticChecks(ws,repoPath,sha){
  for(const f of files.filter(f=>BINARY_EXT.test(f.path)&&!SKIP_PATH.test(f.path)).slice(0,20))
   out.push(finding('committed-binary','info',f.path,1,f.path+' ('+f.size+' byte)','Tệp thực thi/nhị phân nằm trong repo: khó kiểm chứng nguồn gốc so với mã nguồn',{size:f.size}));
  // 8. dangerous APIs (outside vendored libs and tests)
- const dang=(await ws.grepAt(repoPath,sha,DANGER_RE,{max:400})).filter(h=>!SKIP_PATH.test(h.path)&&!SKIP_TESTS.test(h.path));
+ const dang=(await grep(DANGER_RE,{max:400})).filter(h=>!SKIP_PATH.test(h.path)&&!SKIP_TESTS.test(h.path));
  const insecure=dang.filter(h=>/nodeIntegration\s*:\s*true|contextIsolation\s*:\s*false|webSecurity\s*:\s*false|allowRunningInsecureContent/.test(h.text));
  for(const h of insecure)out.push(finding('electron-insecure-prefs','error',h.path,h.line,h.text,'Cấu hình Electron làm yếu cô lập (nodeIntegration/contextIsolation/webSecurity)'));
  for(const h of dang.filter(h=>/shell\.open(Path|External)/.test(h.text)).slice(0,15))out.push(finding('shell-open','info',h.path,h.line,h.text,"Gọi shell.open*: cần bảo đảm đối số không do dữ liệu bên ngoài/tệp không tin cậy quyết định"));
  for(const h of dang.filter(h=>/child_process|\beval\(|new Function\(/.test(h.text)).slice(0,15))out.push(finding('dynamic-exec','info',h.path,h.line,h.text,'Thực thi lệnh/mã động: cần kiểm tra nguồn dữ liệu đầu vào'));
- const inner=await ws.grepAt(repoPath,sha,'\\.innerHTML[ ]*[+]?=',{max:1000});
+ const inner=await grep('\\.innerHTML[ ]*[+]?=',{max:1000});
  const innerApp=inner.filter(h=>!SKIP_PATH.test(h.path)&&!SKIP_TESTS.test(h.path));
  if(innerApp.length)out.push(finding('innerhtml-usage','info',innerApp[0].path,innerApp[0].line,innerApp[0].text,innerApp.length+' chỗ gán innerHTML: mỗi chỗ cần thoát dữ liệu không tin cậy',{count:innerApp.length}));
  // 9. vendored libraries outside npm audit
  const vend=files.filter(f=>/\.min\.js$/i.test(f.path)&&!/node_modules\//.test(f.path));
  if(vend.length)out.push(finding('vendored-libs','info',vend[0].path,1,vend.slice(0,6).map(v=>v.path.split('/').pop()).join(', '),vend.length+' thư viện đóng gói sẵn (*.min.js) nằm NGOÀI phạm vi `npm audit`: cần bảng phiên bản và quy trình quét riêng',{count:vend.length}));
+ if(partial.length)out.unshift(finding('scan-truncated','warning','(quét)',1,partial.join('; '),'Kết quả quét KHÔNG đầy đủ: '+partial.length+' nguồn bị cắt hoặc giới hạn; "không thấy" ở các mục liên quan không có nghĩa là không có',{partial}));
  return {findings:out,filesScanned:files.length};
 }
 
@@ -116,8 +120,10 @@ export class ReviewService{
   const repo=this.#repos.getRepo(repoId);
   if(execute&&consentExecuteCode!==true){const e=new Error('Tầng thực thi chạy mã của repo: cần xác nhận rõ');e.code='CONSENT';throw e;}
   if(!Number.isInteger(maxTokens)||maxTokens<1000||maxTokens>200000){const e=new Error('Giới hạn token phải từ 1.000 đến 200.000');e.code='INVALID';throw e;}
-  const sha=await this.#ws.resolveBase(repo.path,ref||repo.defaultBranch);
-  const r={schemaVersion:1,id:randomBytes(8).toString('hex'),repoId,repo:repo.name,githubRepo:repo.githubRepo,ref:ref||repo.defaultBranch,sha,tiers:{static:true,execute:Boolean(execute),ai:Boolean(ai)},status:'RUNNING',createdBy:actor,createdAt:new Date(this.#now()).toISOString(),evidence:[],findings:[],ai:null,counts:null,notes:['`npm audit` chỉ bao phủ phụ thuộc khai báo trong package.json; thư viện đóng gói sẵn (vendored) nằm ngoài phạm vi.','Báo cáo này đọc commit '+sha+'; không sửa repo, không đẩy gì lên remote.']};
+  const refName=ref||repo.defaultBranch;
+  const fetched=await this.#ws.fetchRemote(repo.path,refName);
+  const sha=await this.#ws.resolveBase(repo.path,fetched.ok?'origin/'+refName:refName);
+  const r={schemaVersion:1,id:randomBytes(8).toString('hex'),repoId,repo:repo.name,githubRepo:repo.githubRepo,ref:refName,sha,tiers:{static:true,execute:Boolean(execute),ai:Boolean(ai)},status:'RUNNING',createdBy:actor,createdAt:new Date(this.#now()).toISOString(),evidence:[],findings:[],ai:null,counts:null,source:fetched.ok?'remote':'local',notes:[fetched.ok?'Nguồn commit: origin/'+refName+' (đã fetch từ remote).':'Nguồn commit: nhánh CỤC BỘ '+refName+' (không fetch được: '+(fetched.reason==='no-remote'?'không có remote origin':(fetched.detail||fetched.reason))+'); có thể cũ so với remote.','`npm audit` chỉ bao phủ phụ thuộc khai báo trong package.json; thư viện đóng gói sẵn (vendored) nằm ngoài phạm vi.','Báo cáo này đọc commit '+sha+'; không sửa repo, không đẩy gì lên remote.']};
   this.#items.set(r.id,r);await this.#save(r);
   this.#runs.set(r.id,this.#execute(r,repo,{maxTokens}).finally(()=>this.#runs.delete(r.id)));
   return structuredClone(r);

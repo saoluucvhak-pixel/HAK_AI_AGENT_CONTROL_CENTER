@@ -10,6 +10,10 @@ import {FileSecretBackend} from '../src/secrets.js';
 import {runGit} from '../src/safe-process.js';
 
 const SCOPE=['src/**','test/**'];
+async function linkOrigin(r,bare,slug){ // origin = a GitHub URL, rewritten (insteadOf) to a local bare repo so nothing leaves the machine
+ const url='https://github.com/'+slug+'.git';
+ await r.g('remote','add','origin',url);await r.g('config','url.'+bare+'.insteadOf',url);
+}
 const CODE=/Agent chỉnh sửa mã/;
 const good=(p='src/feature.js')=>JSON.stringify({summary:'thêm tính năng',edits:[{path:p,content:'export const feature=1;\n'}]});
 const badTest=JSON.stringify({summary:'sai',edits:[{path:'test/broken.test.js',content:"import test from 'node:test';import assert from 'node:assert/strict';test('broken',()=>assert.equal(1,2));\n"}]});
@@ -142,7 +146,7 @@ test('GitHub-linked repo: draft PR is opened with the stored token, never merged
  const x=await setup({codeHandler:()=>good()});
  try{
   const bare=join(x.r.dir,'origin.git');
-  await runGit(['init','-q','--bare',bare],{cwd:x.r.dir});await x.r.g('remote','add','origin',bare);
+  await runGit(['init','-q','--bare',bare],{cwd:x.r.dir});await linkOrigin(x.r,bare,'saoluucvhak-pixel/HAK_AI_SKILLS');
   const linked=await x.svc.registerRepo({name:'linked',path:x.r.repo,githubRepo:'saoluucvhak-pixel/HAK_AI_SKILLS'});
   await x.secrets.set('github:token','ghp_secret_token_value_123456');
   const cc=await x.svc.create({orderId:x.wo.id,repoId:linked.id,scope:SCOPE,consentExecuteCode:true});
@@ -183,7 +187,7 @@ test('any owner/name can be registered; the PR goes to that exact repository; de
  const x=await setup({codeHandler:()=>good()});
  try{
   const bare=join(x.r.dir,'origin.git');
-  await runGit(['init','-q','--bare',bare],{cwd:x.r.dir});await x.r.g('remote','add','origin',bare);
+  await runGit(['init','-q','--bare',bare],{cwd:x.r.dir});await linkOrigin(x.r,bare,'some-org/some.repo-1');
   const other=await x.svc.registerRepo({name:'other-owner',path:x.r.repo,githubRepo:'some-org/some.repo-1',defaultVerify:'node-test'});
   assert.equal(other.defaultVerify,'node-test');
   await assert.rejects(()=>x.svc.registerRepo({name:'v',path:x.r.repo,defaultVerify:'rm -rf'}),/Lệnh kiểm thử/);
@@ -209,5 +213,58 @@ test('replace edits on a large existing file (full rewrite would be refused); re
   assert.match(content,/marker=2/);assert.ok(content.length>40*1024,'the rest of the large file is preserved');
   assert.equal(done.attempts.length,2);assert.match(done.attempts[0].error,/khớp \d+ chỗ/);
   assert.match(x.prompts[1],/khớp \d+ chỗ/,'the anchor error is fed back to the Agent');
+ }finally{await x.cleanup();}
+});
+
+test('P1-1: re-running a BLOCKED change resets the unpublished work branch and succeeds',async()=>{
+ let n=0;
+ const bad=JSON.stringify({edits:[{path:'test/broken.test.js',content:"import test from 'node:test';import assert from 'node:assert/strict';test('x',()=>assert.equal(1,2));\n"}]});
+ const x=await setup({codeHandler:()=>n++===0?bad:good()});
+ try{
+  const cc=await x.mk({maxRepairs:0});
+  const first=await run(x,cc);
+  assert.equal(first.status,'BLOCKED');
+  await x.svc.start(cc.id);await x.svc.whenIdle(cc.id);
+  const again=x.svc.get(cc.id);
+  assert.equal(again.status,'VERIFIED',JSON.stringify(again.error));
+  assert.equal(again.runs,2);assert.equal(again.attempts.length,1,'attempts restart on a re-run');
+  assert.equal((await x.r.g('rev-parse','refs/heads/'+cc.branch)).stdout.trim(),again.headSha,'the branch points at the new verified commit');
+  assert.equal((await x.r.g('branch','--list','hak/*')).stdout.trim().replace(/^[+* ]+/,''),cc.branch,'no extra branches');
+ }finally{await x.cleanup();}
+});
+test('P1-2: a remote that does not match the declared GitHub repository is refused at registration and at publish; a changed remote invalidates the approval',async()=>{
+ const x=await setup({codeHandler:()=>good()});
+ try{
+  const bare=join(x.r.dir,'origin.git');await runGit(['init','-q','--bare',bare],{cwd:x.r.dir});
+  await x.r.g('remote','add','origin','https://github.com/real-org/real-repo.git');await x.r.g('config','url.'+bare+'.insteadOf','https://github.com/real-org/real-repo.git');
+  await assert.rejects(()=>x.svc.registerRepo({name:'wrong',path:x.r.repo,githubRepo:'some-other-org/unrelated-repo'}),e=>e.code==='REMOTE_MISMATCH');
+  const ok=await x.svc.registerRepo({name:'right',path:x.r.repo,githubRepo:'Real-Org/Real-Repo'});
+  const cc=await x.svc.create({orderId:x.wo.id,repoId:ok.id,scope:SCOPE,consentExecuteCode:true});
+  await run(x,cc);await x.svc.approvePublish(cc.id);
+  await x.r.g('remote','set-url','origin','https://github.com/evil-org/other.git');
+  await assert.rejects(()=>x.svc.publish(cc.id),e=>e.code==='NOT_APPROVED'&&/Remote đích đã đổi/.test(e.message));
+  assert.equal((await runGit(['branch','--list'],{cwd:bare})).stdout.trim(),'','nothing was pushed');
+  const noRemote=await makeRepo();
+  try{await assert.rejects(()=>x.svc.registerRepo({name:'none',path:noRemote.repo,githubRepo:'a/b'}),e=>e.code==='REMOTE_MISMATCH');}finally{await noRemote.cleanup();}
+ }finally{await x.cleanup();}
+});
+test('P1-3: the base is the fetched remote tip when a remote exists; local with an explicit note otherwise',async()=>{
+ const x=await setup({codeHandler:()=>good()});
+ try{
+  const local=await x.mk();
+  assert.equal(local.baseSource,'local');assert.match(local.baseNote,/không có remote origin/);
+  const bare=join(x.r.dir,'origin.git');await runGit(['init','-q','--bare',bare],{cwd:x.r.dir});
+  await x.r.g('remote','add','origin',bare);await x.r.g('push','-q','origin','main');
+  // the remote moves ahead; the local main branch stays behind
+  const other=join(x.r.dir,'other');await runGit(['clone','-q','-b','main',bare,other],{cwd:x.r.dir});
+  await writeFile(join(other,'remote-only.txt'),'x\n');await runGit(['add','-A'],{cwd:other});await runGit(['commit','-q','-m','ahead'],{cwd:other});await runGit(['push','-q','origin','main'],{cwd:other});
+  const tip=(await runGit(['rev-parse','HEAD'],{cwd:other})).stdout.trim();
+  const fresh=await x.mk();
+  assert.equal(fresh.baseSource,'remote');assert.equal(fresh.baseSha,tip,'based on the real remote tip');assert.notEqual(fresh.baseSha,x.r.sha);
+  assert.equal(fresh.baseNote,null);
+  // unreachable remote → falls back to local and says so
+  await x.r.g('remote','set-url','origin',join(x.r.dir,'does-not-exist.git'));
+  const broken=await x.mk();
+  assert.equal(broken.baseSource,'local');assert.match(broken.baseNote,/Không fetch được/);
  }finally{await x.cleanup();}
 });

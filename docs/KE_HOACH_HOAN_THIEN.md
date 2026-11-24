@@ -12,11 +12,13 @@ Quy tắc bằng chứng: lần chạy mà đầu ra "mô hình" do trợ lý vi
 | R. Review (kiểm tra lại, chỉ đọc) | Lát 1 XONG: tầng tĩnh xác định (bí mật, quyền workflow, action không ghim, `npm install` trong CI, thiếu lockfile, CSP, tệp thực thi, Electron không an toàn, `shell.open*`, `innerHTML`, thư viện đóng gói sẵn) đọc thẳng từ đối tượng git; tầng thực thi tùy chọn (kiểm thử + `npm audit`, cần xác nhận); tầng AI tùy chọn với **trích dẫn bắt buộc `path:line` + đoạn trích, được xác minh tại commit gốc** (không khớp thì gắn "chưa xác minh"); báo cáo tách bằng chứng công cụ khỏi nhận định AI. Chưa làm: review diff/PR trước cổng 2; tích hợp `HAK_CODE_QUALITY_TEST` qua CLI có phiên bản; biến phát hiện thành Work Order | Tầng AI cần khóa API (BLOCKED tới khi có) |
 | C. Sửa lỗi CI (TC08) | Log CI đúng SHA hiện tại → vòng sửa có giới hạn → cùng nhánh | CHƯA LÀM | cần B hoàn tất + repo thử có CI |
 | D. Nghiệm thu thí điểm | Chứng thư PDF (Kho), CSP (xuất hàng) bằng mô hình thật qua ứng dụng; PR do ứng dụng mở, CI đích xanh, người rà soát | CHƯA | A, B (PR thật), quyền ghi repo |
-| E. Windows/phát hành | `npm-ci-test` thật trên Windows; TC17 máy sạch; quyết định ký mã; tag → Release nháp | MỘT PHẦN: cài/nâng cấp/gỡ đạt trên runner; TC17 do người dùng cài thử | máy Windows sạch (người dùng sẽ làm), chứng thư ký mã |
+| E. ~~Windows/phát hành~~ | ĐÃ GỠ (24/11/2026): công cụ chạy trong container/CI | không áp dụng |
+| S. Sửa lõi sau rà soát | XONG: chạy lại thay đổi bị chặn, remote khớp GitHub repo + gắn vào phê duyệt, nền lấy từ remote đã fetch, quét không bị cắt âm thầm, sao lưu không chứa khóa, khóa qua biến môi trường | test hồi quy |
+| K. Chế độ dòng lệnh cho container/CI | CHƯA LÀM: `review`/`write` không giao diện, Dockerfile không root, workflow mẫu, cổng phê duyệt qua cơ chế của CI, sandbox cho mã AI viết | quyết định về sandbox |
 
 Hoãn (P2): Kanban/Audit riêng, Skills registry, Claude-Mem, SQLite, đa người dùng, hiệu năng ngoài kiểm tra nhanh. Chỉ kéo lại nếu thí điểm cho thấy cần.
 
-"Đưa vào sử dụng" (phải đạt trước khi gọi stable): ≥ 2 repo × ≥ 3 lần chạy liên tiếp bằng mô hình thật, PR do ứng dụng mở, CI repo đích xanh, một người rà soát, không sửa tay; TC17 đạt; mọi Release Gate bắt buộc đạt.
+"Đưa vào sử dụng" (phải đạt trước khi gọi stable): ≥ 2 repo × ≥ 3 lần chạy liên tiếp bằng mô hình thật, PR do ứng dụng mở, CI repo đích xanh, một người rà soát, không sửa tay; mọi Release Gate bắt buộc đạt (không còn TC17/Windows).
 
 ## Gói R: tiêu chí nghiệm thu (golden set)
 Các lần rà soát thủ công là bộ chuẩn. Mỗi mục ghi tầng phải bắt được:

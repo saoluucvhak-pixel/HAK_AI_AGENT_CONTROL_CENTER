@@ -178,3 +178,44 @@ test('large files: the CSP at the top of a >600 KB html is found (head is read, 
   assert.equal(await ws.readAtBase(r.repo,r.sha,'index.html',1000),null,'strict mode refuses instead of returning a partial file');
  }finally{await r.cleanup();}
 });
+
+test('P1-5: capped scans are reported as incomplete, never as clean; a small repo has no such warning',async()=>{
+ const lines=Array.from({length:3000},(_,i)=>'el.innerHTML = x; // line '+i).join('\n')+'\n';
+ const r=await makeRepo({'src/a.js':lines},{pkgTest:false});
+ const small=await makeRepo({'src/a.js':'el.innerHTML = x;\n'},{pkgTest:false});
+ try{
+  const ws=new Workspace({dir:join(r.dir,'ws')});
+  const g=await ws.grepAt(r.repo,r.sha,'\\.innerHTML[ ]*[+]?=',{max:100});
+  assert.equal(g.length,100);assert.equal(g.capped,true);assert.equal(g.truncated,false);
+  const f=(await runStaticChecks(ws,r.repo,r.sha)).findings;
+  const flag=f.find(x=>x.rule==='scan-truncated');
+  assert.ok(flag,'3000 matches exceed the 1000-hit cap, so the scan must be flagged incomplete');
+  assert.equal(flag.severity,'warning');assert.match(flag.title,/KHÔNG đầy đủ/);assert.match(flag.snippet,/nhiều hơn 1000/);
+  const wsS=new Workspace({dir:join(small.dir,'ws')});
+  assert.ok(!(await runStaticChecks(wsS,small.repo,small.sha)).findings.some(x=>x.rule==='scan-truncated'));
+ }finally{await r.cleanup();await small.cleanup();}
+});
+test('P1-5b: git output beyond the hard ceiling is flagged truncated (not silently the tail)',async()=>{
+ const r=await makeRepo({'src/a.js':Array.from({length:3000},(_,i)=>'el.innerHTML = x; // '+i).join('\n')+'\n'},{pkgTest:false});
+ try{
+  const ws=new Workspace({dir:join(r.dir,'ws')});
+  const g=await ws.grepAt(r.repo,r.sha,'innerHTML',{max:5000,maxBytes:4096});
+  assert.equal(g.truncated,true,'ceiling hit must be reported, the caller must not treat the tail as the full list');
+  const full=await ws.grepAt(r.repo,r.sha,'innerHTML',{max:5000});
+  assert.equal(full.truncated,false);assert.equal(full.length,3000);
+  const none=await ws.grepAt(r.repo,r.sha,'zzz_no_match_zzz',{max:5});
+  assert.equal(none.length,0);assert.equal(none.truncated,false);
+ }finally{await r.cleanup();}
+});
+test('review records where the commit came from (remote fetch or local branch)',async()=>{
+ const r=await makeRepo({'src/a.js':'export const a=1;\n'},{pkgTest:false});
+ try{
+  const t=await tempDir();
+  const svc=new ReviewService({dir:t.dir,workspace:new Workspace({dir:join(t.dir,'ws')}),repos:stub(r)});await svc.load();
+  const a=await svc.start({repoId:'r1'});await svc.whenIdle(a.id);
+  const rep=svc.get(a.id);
+  assert.equal(rep.source,'local');assert.match(rep.notes[0],/CỤC BỘ/);
+  assert.match(svc.report(a.id),/Nguồn commit: nhánh CỤC BỘ/);
+  await t.cleanup();
+ }finally{await r.cleanup();}
+});

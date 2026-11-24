@@ -3,16 +3,17 @@ import {createHash} from 'node:crypto';
 import {join,relative,resolve,sep,dirname} from 'node:path';
 
 const SKIP_DIRS=new Set(['backups','logs','workspaces']); // workspaces are disposable git worktrees
+const SKIP_FILE=/^secrets(\..+)?\.json(\.bak)?$/;   // API keys / tokens are never copied into backups
 const sha=buf=>createHash('sha256').update(buf).digest('hex');
 async function walk(dir,base=dir,out=[]){
  for(const e of await readdir(dir,{withFileTypes:true})){
   const full=join(dir,e.name);
   if(e.isDirectory()){if(dir===base&&SKIP_DIRS.has(e.name))continue;await walk(full,base,out);}
-  else if(e.isFile()&&!e.name.endsWith('.tmp'))out.push(relative(base,full).split(sep).join('/'));
+  else if(e.isFile()&&!e.name.endsWith('.tmp')&&!(dir===base&&SKIP_FILE.test(e.name)))out.push(relative(base,full).split(sep).join('/'));
  }
  return out;
 }
-/** Copy user data into <dataDir>/backups/backup-<stamp>/ with a SHA-256 manifest. Secrets stay DPAPI-encrypted (only restorable by the same Windows user). */
+/** Copy user data into <dataDir>/backups/backup-<stamp>/ with a SHA-256 manifest. Secrets files are excluded on purpose: back up keys through the platform secret store. */
 export async function createBackup(dataDir,{now=()=>new Date()}={}){
  const root=resolve(dataDir);
  const stamp=now().toISOString().replace(/[:.]/g,'-');

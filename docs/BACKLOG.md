@@ -14,7 +14,7 @@ PR #126 (HAK_TEST_AI_WINDOWS) đang mở, chưa merge, không xung đột với 
 | Agent Engine cũ (tuần tự, 1 gateway) | DEPRECATED | thay bằng `src/orchestrator.js` (vẫn dùng cho đường cũ) |
 | Provider Adapter OpenAI-compatible/OmniRoute, Anthropic, Gemini | IMPLEMENTED_NOT_VERIFIED | test hợp đồng bằng HTTP giả; **chưa gọi API thật** (không có khóa) |
 | Provider Manager + giao diện cấu hình | IMPLEMENTED_AND_VERIFIED (mô phỏng) | `provider-manager`, `v2-http-e2e`, ảnh chụp UI |
-| Kho bí mật: Windows DPAPI | IMPLEMENTED_NOT_VERIFIED | test thật chỉ chạy trên Windows (CI matrix) |
+| Kho bí mật | IMPLEMENTED_AND_VERIFIED | khóa qua biến môi trường (`apiKeyEnv`, `HAK_GITHUB_TOKEN`); tệp 0600 chỉ để phát triển; sao lưu loại trừ khóa |
 | Phê duyệt gắn phạm vi (server cấp, hết hạn, đổi phạm vi → hủy) | IMPLEMENTED_AND_VERIFIED | `approvals.test.js`, `orchestrator.test.js` |
 | Multi-Agent: DAG, handoff, song song, retry, timeout, hủy, tạm dừng, ngân sách, checkpoint | IMPLEMENTED_AND_VERIFIED (mô phỏng) | `orchestrator.test.js` (18 ca) |
 | Khôi phục sau gián đoạn (INTERRUPTED, không tự chạy lại) | IMPLEMENTED_AND_VERIFIED | test mô phỏng crash |
@@ -23,7 +23,7 @@ PR #126 (HAK_TEST_AI_WINDOWS) đang mở, chưa merge, không xung đột với 
 | HAK AI Skills registry / Code Quality gate / Claude-Mem theo dự án | NOT_IMPLEMENTED (tích hợp) | module Claude-Mem bridge cũ chỉ là cầu "reviewed-export-only" |
 | OCR, Orca | PARTIALLY_IMPLEMENTED | probe kết nối; không tích hợp vào Work Order |
 | Kết nối Claude/Gemini thật | BLOCKED_BY_EXTERNAL_DEPENDENCY | cần API key của người dùng |
-| Bộ cài Windows (Inno Setup, per-user, runtime Node kèm) | IMPLEMENTED_AND_VERIFIED (runner CI) | cài/nâng cấp/gỡ 21/21 trên `208b37f`; chưa thử trên Windows sạch của người dùng |
+| Bộ cài Windows | DEPRECATED (đã gỡ 24/11/2026) | công cụ chạy trong container/CI |
 | Ký mã (code signing) | NOT_IMPLEMENTED | bộ cài **chưa ký** |
 | Sao lưu/phục hồi dữ liệu v2 | PARTIALLY_IMPLEMENTED | `src/data-backup.js` + test; chưa có UI phục hồi |
 | SQLite / truy vấn lịch sử lớn | NOT_IMPLEMENTED | JSON atomic + `.bak` đủ cho quy mô hiện tại; chưa đo |

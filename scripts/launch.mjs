@@ -33,11 +33,6 @@ export function openBrowser(url,platform=process.platform,spawnImpl=spawn){
  if(platform==='darwin')return spawnImpl('open',[url],{stdio:'ignore',detached:true}).unref();
  return spawnImpl('xdg-open',[url],{stdio:'ignore',detached:true}).unref();
 }
-export function installedDataDir(env=process.env,platform=process.platform){
- if(env.HAK_DATA_DIR)return env.HAK_DATA_DIR;
- const base=platform==='win32'?env.LOCALAPPDATA:null;
- return base?join(base,'HAK','AI_AGENT_CONTROL_CENTER'):null;
-}
 export async function choosePort(start,inspect=inspectDashboard,span=10){
  for(let i=0;i<span;i++){
   const port=start+i;if(port>65535)break;
@@ -49,8 +44,6 @@ export async function choosePort(start,inspect=inspectDashboard,span=10){
  throw new Error('Không tìm thấy cổng trống từ '+start+' đến '+(start+span-1)+'. Đóng ứng dụng đang chiếm cổng hoặc đặt biến PORT khác.');
 }
 async function main(){
- const installed=existsSync(join(root,'installed.json'));
- if(installed&&!process.env.HAK_DATA_DIR){const dir=installedDataDir();if(dir)process.env.HAK_DATA_DIR=dir;}
  const dataRoot=process.env.HAK_DATA_DIR?resolve(process.env.HAK_DATA_DIR):join(root,'data');
  const envPath=join(root,'.env');
  if(existsSync(envPath)){

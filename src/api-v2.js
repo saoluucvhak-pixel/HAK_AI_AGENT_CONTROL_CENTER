@@ -84,7 +84,7 @@ export function createApiV2({getPort,token,providers,orchestrator,codeChanges=nu
    }
    if(a==='backups'&&dataDir){
     if(req.method==='GET'){send({backups:await listBackups(dataDir)});return true;}
-    if(req.method==='POST'){step='backup';const r=await createBackup(dataDir);send({fileCount:r.fileCount,name:r.path.split(/[\\/]/).pop(),note:'Bản sao nằm trong thư mục backups của dữ liệu người dùng. Khóa API vẫn được mã hóa DPAPI và chỉ phục hồi được bởi cùng tài khoản Windows.'},201);return true;}
+    if(req.method==='POST'){step='backup';const r=await createBackup(dataDir);send({fileCount:r.fileCount,name:r.path.split(/[\\/]/).pop(),note:'Bản sao nằm trong thư mục backups của dữ liệu người dùng. Khóa API và token KHÔNG nằm trong bản sao lưu: hãy quản lý chúng bằng secret của nền tảng (biến môi trường).'},201);return true;}
    }
    if(a==='shutdown'&&req.method==='POST'&&onShutdown){send({ok:true});setTimeout(onShutdown,50);return true;}
    send({error:'Không có chức năng này',code:'NOT_FOUND',action:'Cập nhật ứng dụng hoặc kiểm tra đường dẫn.'},404);return true;

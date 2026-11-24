@@ -35,7 +35,7 @@ function resetProviderForm(){
  $('provider-form').reset();$('p-id').value='';$('p-endpoint').value=DEFAULT_ENDPOINT[$('p-type').value];$('p-type').disabled=false;
 }
 function editProvider(c){
- $('p-id').value=c.id;$('p-type').value=c.type;$('p-type').disabled=true;$('p-name').value=c.name;$('p-endpoint').value=c.endpoint;$('p-model').value=c.model;$('p-key').value='';
+ $('p-id').value=c.id;$('p-type').value=c.type;$('p-type').disabled=true;$('p-name').value=c.name;$('p-endpoint').value=c.endpoint;$('p-model').value=c.model;$('p-key').value='';$('p-keyenv').value=c.apiKeyEnv||'';
  $('p-timeout').value=c.timeoutMs;$('p-maxtokens').value=c.maxTokens;$('p-retries').value=c.retries;$('p-conc').value=c.maxConcurrency;
  $('p-cost').value=c.costLimitUsd??'';$('p-pin').value=c.priceInputPerMTok??'';$('p-pout').value=c.priceOutputPerMTok??'';
  $('provider-form').scrollIntoView({block:'nearest'});
@@ -73,6 +73,7 @@ $('provider-form').addEventListener('submit',async ev=>{
  const num=id=>$(id).value===''?undefined:Number($(id).value);
  const body={type:$('p-type').value,name:$('p-name').value,endpoint:$('p-endpoint').value,model:$('p-model').value,timeoutMs:num('p-timeout'),maxTokens:num('p-maxtokens'),retries:num('p-retries'),maxConcurrency:num('p-conc'),costLimitUsd:$('p-cost').value===''?null:Number($('p-cost').value),priceInputPerMTok:$('p-pin').value===''?null:Number($('p-pin').value),priceOutputPerMTok:$('p-pout').value===''?null:Number($('p-pout').value)};
  if($('p-key').value)body.apiKey=$('p-key').value;
+ body.apiKeyEnv=$('p-keyenv').value||null;
  try{
   const id=$('p-id').value;
   if(id){delete body.type;await api('/providers/'+id,'PUT',body);}else await api('/providers','POST',body);

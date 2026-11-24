@@ -37,3 +37,18 @@ test('tampered or incomplete backups are rejected and nothing is restored',async
   await assert.rejects(()=>readdir(join(t.dir,'out')),/ENOENT/);
  }finally{await t.cleanup();}
 });
+
+test('backups never contain API keys or tokens (secrets files are excluded)',async()=>{
+ const t=await tempDir();
+ try{
+  const data=join(t.dir,'live');await mkdir(data,{recursive:true});
+  await writeFile(join(data,'providers.json'),'{}');
+  await writeFile(join(data,'secrets.json'),'{"provider:abc":"sk-ant-REALKEY"}');
+  await writeFile(join(data,'secrets.json.bak'),'{"provider:abc":"sk-ant-OLDKEY"}');
+  const b=await createBackup(data);
+  assert.equal(b.fileCount,1);
+  const {readdir:rd}=await import('node:fs/promises');
+  const names=await rd(join(b.path,'data'));
+  assert.deepEqual(names,['providers.json']);
+ }finally{await t.cleanup();}
+});

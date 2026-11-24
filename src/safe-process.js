@@ -13,14 +13,13 @@ export function scrubbedEnv(extra={},base=process.env){
 }
 function killTree(child){
  if(child.pid===undefined)return;
- if(process.platform==='win32'){try{spawn('taskkill',['/PID',String(child.pid),'/T','/F'],{stdio:'ignore',windowsHide:true});}catch{/* already gone */}return;}
  try{process.kill(-child.pid,'SIGKILL');}catch{try{child.kill('SIGKILL');}catch{/* gone */}}
 }
 /** shell:false, timeout with process-tree kill, bounded and redacted output, optional abort signal. */
 export function runProcess(cmd,args,{cwd,env=scrubbedEnv(),timeoutMs=60000,maxBytes=64*1024,signal,secrets=[]}={}){
  return new Promise(resolve=>{
   let child;
-  try{child=spawn(cmd,args,{cwd,env,shell:false,windowsHide:true,detached:process.platform!=='win32',stdio:['ignore','pipe','pipe']});}
+  try{child=spawn(cmd,args,{cwd,env,shell:false,detached:true,stdio:['ignore','pipe','pipe']});}
   catch(e){resolve({code:null,error:'spawn-failed',stdout:'',stderr:redact(e.message,secrets),timedOut:false,truncated:false});return;}
   let out='',err='',truncated=false,timedOut=false,aborted=false,settled=false;
   const take=(cur,d)=>{const s=cur+d.toString('utf8');if(s.length>maxBytes){truncated=true;return s.slice(-maxBytes);}return s;};
@@ -34,8 +33,7 @@ export function runProcess(cmd,args,{cwd,env=scrubbedEnv(),timeoutMs=60000,maxBy
   child.on('close',code=>done(code));
  });
 }
-// Git for Windows rejects Node's os.devNull (\\.\nul); it needs the plain DOS name.
-const NULL_DEVICE=process.platform==='win32'?'NUL':'/dev/null';
+const NULL_DEVICE='/dev/null';
 const HOOKS_DIR=join(tmpdir(),'hak-empty-hooks');
 const NPM_NET=['HTTPS_PROXY','HTTP_PROXY','NO_PROXY','https_proxy','http_proxy','no_proxy','npm_config_https_proxy','npm_config_proxy','npm_config_noproxy','npm_config_cafile','NODE_EXTRA_CA_CERTS','SSL_CERT_FILE','SSL_CERT_DIR'];
 /** Dependency download step only: proxy / CA settings so the registry is reachable. The test step never gets these. */

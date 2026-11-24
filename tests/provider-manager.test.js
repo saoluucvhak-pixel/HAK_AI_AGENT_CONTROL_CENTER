@@ -68,3 +68,25 @@ test('provider errors surface normalized, retryable flag preserved',async()=>{
   await assert.rejects(()=>s.providers.execute(s.conn.id,{prompt:'x',model:'m-1'}),e=>e.code==='RATE_LIMIT'&&e.retryable===true);
  }finally{await s.cleanup();}
 });
+
+test('connections can reference an environment variable: nothing is stored, the value is read at call time, bad names are refused',async()=>{
+ const s=await buildStack();
+ try{
+  process.env.TEST_PROVIDER_KEY='env-secret-key-1234567890';
+  const c=await s.providers.upsert({type:'openai-compatible',name:'Env',endpoint:'http://127.0.0.1:20130',model:'m-1',apiKeyEnv:'TEST_PROVIDER_KEY'});
+  assert.equal(c.hasSecret,true);assert.equal(c.apiKeyEnv,'TEST_PROVIDER_KEY');
+  const {readFile}=await import('node:fs/promises');
+  assert.ok(!(await readFile(join(s.dir,'secrets.json'),'utf8')).includes('env-secret-key'),'the value is never written to disk');
+  assert.ok(!(await readFile(join(s.dir,'providers.json'),'utf8')).includes('env-secret-key'));
+  await s.providers.execute(c.id,{prompt:'x',model:'m-1'});
+  assert.equal(s.gw.calls.at(-1).headers.Authorization,'Bearer env-secret-key-1234567890');
+  process.env.TEST_PROVIDER_KEY='rotated-key-0987654321';
+  await s.providers.execute(c.id,{prompt:'y',model:'m-1'});
+  assert.equal(s.gw.calls.at(-1).headers.Authorization,'Bearer rotated-key-0987654321','rotation without restart');
+  await assert.rejects(()=>s.providers.upsert({type:'anthropic',name:'Bad',endpoint:'https://api.anthropic.com',model:'x',apiKeyEnv:'PATH'}),/_KEY, _TOKEN/);
+  await assert.rejects(()=>s.providers.upsert({type:'anthropic',name:'Both',endpoint:'https://api.anthropic.com',model:'x',apiKeyEnv:'TEST_PROVIDER_KEY'},'also-a-literal-key-1234'),/Chọn một/);
+  await assert.rejects(()=>s.providers.upsert({type:'anthropic',name:'Missing',endpoint:'https://api.anthropic.com',model:'x',apiKeyEnv:'NOT_SET_ANYWHERE_KEY'}),/chưa được đặt/);
+  delete process.env.TEST_PROVIDER_KEY;
+  assert.equal((await s.providers.list()).find(x=>x.id===c.id).hasSecret,false,'a missing variable is reported, not hidden');
+ }finally{delete process.env.TEST_PROVIDER_KEY;await s.cleanup();}
+});

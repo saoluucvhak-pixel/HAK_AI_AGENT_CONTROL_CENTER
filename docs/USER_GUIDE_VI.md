@@ -1,13 +1,12 @@
 # Hướng dẫn sử dụng (Windows)
 
-## Cài đặt
-1. Tải `HAK_AI_AGENT_SETUP_<phiên bản>.exe` và đối chiếu SHA-256 với `SHA256SUMS.txt`.
-2. Chạy bộ cài (không cần quyền Administrator). Bộ cài chưa ký nên Windows có thể hiện cảnh báo SmartScreen.
-3. Mở **HAK AI Agent Control Center** từ Desktop/Start Menu. Trình duyệt sẽ mở giao diện tại `http://127.0.0.1:4317` (hoặc cổng kế tiếp nếu 4317 bị chiếm).
+## Chạy (container/CI)
+Công cụ không còn bộ cài Windows. Chạy `node src/server.js` (Node ≥ 20, cần `git`; `npm` cho lệnh kiểm thử `npm-test`/`npm-ci-test`). Giao diện nghe ở `127.0.0.1:4317`. Dữ liệu ở thư mục `HAK_DATA_DIR`.
+Khóa nạp bằng biến môi trường của nền tảng (secret của container/CI): trong AI Provider Manager điền **tên biến** (ví dụ `ANTHROPIC_API_KEY`), không dán khóa. Token GitHub: `HAK_GITHUB_TOKEN`.
 
 ## Cấu hình AI (không cần sửa file)
 1. Vào mục **AI Provider Manager**.
-2. Chọn loại (Claude / Gemini / OpenAI-compatible hoặc OmniRoute), đặt tên, nhập endpoint, model và API key rồi **Lưu kết nối**. Key được mã hóa bằng DPAPI theo tài khoản Windows của bạn.
+2. Chọn loại (Claude / Gemini / OpenAI-compatible hoặc OmniRoute), đặt tên, nhập endpoint, model và **tên biến môi trường** chứa khóa rồi **Lưu kết nối** (hoặc nhập khóa trực tiếp khi phát triển cục bộ: lưu tệp quyền 0600, không mã hóa).
 3. Bấm **Kiểm tra kết nối**. Kết quả chỉ chứng minh kết nối và xác thực HTTP; danh tính model không được xác minh độc lập.
 4. Nhập **đơn giá token** nếu muốn xem chi phí hoặc đặt giới hạn chi phí. Không có đơn giá thì chi phí hiển thị là "không xác định".
 5. (Tùy chọn) gán model riêng cho từng Agent.

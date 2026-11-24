@@ -3,6 +3,7 @@ import {join,dirname,resolve} from 'node:path';
 import {existsSync,realpathSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {runGit,runProcess,scrubbedEnv,npmInstallEnv} from './safe-process.js';
+import {redact as redactText} from './secrets.js';
 import {validateEditPath,assertInsideRoot,matchesScope,PathError} from './code-paths.js';
 
 const SHA=/^[a-f0-9]{40}$/;
@@ -59,6 +60,23 @@ export class Workspace{
   if(canonical(top.stdout.trim())!==canonical(root))throw new WorkspaceError('NOT_REPO','Hãy chỉ định thư mục gốc của repository');
   return {root};
  }
+ /** Raw configured push target (not insteadOf-expanded): pushurl if set, else url. Credentials are stripped. */
+ async remoteTarget(repoPath,remote='origin'){
+  const get=async k=>{const r=await this.#git(['config','--get',k],{cwd:repoPath});return r.code===0?r.stdout.trim():null;};
+  const url=(await get('remote.'+remote+'.pushurl'))||(await get('remote.'+remote+'.url'));
+  if(!url)return {url:null,slug:null};
+  const clean=url.replace(/\/\/[^@\/]+@/,'//');
+  const m=/^(?:https?:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i.exec(clean);
+  return {url:clean,slug:m?(m[1]+'/'+m[2]).toLowerCase():null};
+ }
+ /** Update origin/<branch> so the base is the real remote tip, not a stale local branch. Never throws: reports why it could not. */
+ async fetchRemote(repoPath,branch,remote='origin'){
+  if(typeof branch!=='string'||!/^[A-Za-z0-9_./-]{1,100}$/.test(branch)||branch.startsWith('-'))return {ok:false,reason:'bad-branch'};
+  const t=await this.remoteTarget(repoPath,remote);
+  if(!t.url)return {ok:false,reason:'no-remote'};
+  const r=await this.#git(['fetch','--no-tags','--',remote,'+refs/heads/'+branch+':refs/remotes/'+remote+'/'+branch],{cwd:repoPath,timeoutMs:120000,network:true});
+  return r.code===0?{ok:true}:{ok:false,reason:'fetch-failed',detail:redactText(r.stderr).slice(0,200)};
+ }
  async resolveBase(repoPath,ref){
   if(typeof ref!=='string'||!/^[A-Za-z0-9_./-]{1,100}$/.test(ref)||ref.startsWith('-'))throw new WorkspaceError('BAD_REF','Tham chiếu nhánh không hợp lệ');
   const r=await this.#git(['rev-parse','--verify',ref+'^{commit}'],{cwd:repoPath});
@@ -67,14 +85,14 @@ export class Workspace{
   return sha;
  }
  async headSha(worktree){const r=await this.#git(['rev-parse','HEAD'],{cwd:worktree});return r.stdout.trim();}
- async create({id,repoPath,baseSha,branch}){
+ async create({id,repoPath,baseSha,branch,reset=false}){
   if(!SHA.test(baseSha))throw new WorkspaceError('BAD_REF','Cần SHA đầy đủ của commit gốc');
   if(!/^hak\/[a-z0-9][a-z0-9-]{2,60}$/.test(branch))throw new WorkspaceError('BAD_BRANCH','Tên nhánh làm việc không hợp lệ');
   const wt=this.path(id);
   return this.#withLock(resolve(repoPath),async()=>{
    await this.remove({id,repoPath}).catch(()=>{});
    await mkdir(this.#dir,{recursive:true,mode:0o700});
-   const r=await this.#git(['worktree','add','-b',branch,wt,baseSha],{cwd:repoPath});
+   const r=await this.#git(['worktree','add',reset?'-B':'-b',branch,wt,baseSha],{cwd:repoPath});
    if(r.code!==0)throw new WorkspaceError('WORKTREE','Không tạo được workspace: '+r.stderr.trim().slice(0,200));
    return wt;
   });
@@ -85,22 +103,27 @@ export class Workspace{
   await rm(wt,{recursive:true,force:true});
   await this.#git(['worktree','prune'],{cwd:repoPath});
  }
- /** Every path at a commit (no checkout needed). */
+ /** Every path at a commit (no checkout needed). The returned array has `.truncated` when git output hit the size ceiling. */
  async listAll(repoPath,sha){
-  const r=await this.#git(['ls-tree','-r','-l','-z',sha],{cwd:repoPath,maxBytes:8*1024*1024});
+  const r=await this.#git(['ls-tree','-r','-l','-z',sha],{cwd:repoPath,maxBytes:32*1024*1024});
   if(r.code!==0)throw new WorkspaceError('GIT','Không đọc được cây thư mục');
-  return r.stdout.split('\0').filter(Boolean).map(l=>{const m=/^(\d+) (\w+) ([0-9a-f]{40})\s+(\S+)\t(.+)$/.exec(l);return m?{path:m[5],size:m[4]==='-'?0:Number(m[4]),type:m[2]}:null;}).filter(x=>x&&x.type==='blob');
+  const out=r.stdout.split('\0').filter(Boolean).map(l=>{const m=/^(\d+) (\w+) ([0-9a-f]{40})\s+(\S+)\t(.+)$/.exec(l);return m?{path:m[5],size:m[4]==='-'?0:Number(m[4]),type:m[2]}:null;}).filter(x=>x&&x.type==='blob');
+  out.truncated=Boolean(r.truncated);
+  return out;
  }
- /** git grep over a commit: [{path,line,text}] (binary files skipped, output bounded). */
- async grepAt(repoPath,sha,pattern,{max=300}={}){
-  const r=await this.#git(['grep','-I','-n','-E','--no-color','-e',pattern,sha,'--'],{cwd:repoPath,maxBytes:2*1024*1024,timeoutMs:60000});
-  if(r.code===1)return [];
-  if(r.code!==0)throw new WorkspaceError('GIT','git grep thất bại');
+ /** git grep over a commit: [{path,line,text}]. `.truncated` = git output exceeded the ceiling; `.capped` = more matches existed than `max`. */
+ async grepAt(repoPath,sha,pattern,{max=300,maxBytes=32*1024*1024}={}){
+  const r=await this.#git(['grep','-I','-n','-E','--no-color','-e',pattern,sha,'--'],{cwd:repoPath,maxBytes,timeoutMs:90000});
   const out=[];
+  if(r.code===1){out.truncated=false;out.capped=false;return out;}
+  if(r.code!==0)throw new WorkspaceError('GIT','git grep thất bại');
+  let capped=false;
   for(const l of r.stdout.split('\n')){
-   const m=/^[0-9a-f]{40}:(.+?):(\d+):(.*)$/.exec(l);if(m)out.push({path:m[1],line:Number(m[2]),text:m[3]});
-   if(out.length>=max)break;
+   const m=/^[0-9a-f]{40}:(.+?):(\d+):(.*)$/.exec(l);if(!m)continue;
+   if(out.length>=max){capped=true;break;}
+   out.push({path:m[1],line:Number(m[2]),text:m[3]});
   }
+  out.truncated=Boolean(r.truncated);out.capped=capped;
   return out;
  }
  /** Detached worktree (no branch is created) for read-only execution checks. */
