@@ -10,10 +10,20 @@ if(!specPath){
 }
 const args=process.argv.slice(3);
 const publish=args.includes('--publish');
+const useGitCred=args.includes('--use-git-credential');
 const outIdx=args.indexOf('--out');
 const outPath=outIdx>=0?args[outIdx+1]:'';
 const authorized=publish&&process.env.HAK_AUTHORIZE_DRAFT_PR==='I_APPROVE_DRAFT_PR_ONLY';
 
+function resolveToken(){
+ if(process.env.GITHUB_TOKEN)return process.env.GITHUB_TOKEN;
+ if(!useGitCred)return '';
+ const out=execFileSync('git',['credential','fill'],{input:'protocol=https\nhost=github.com\n\n',encoding:'utf8',stdio:['pipe','pipe','ignore'],timeout:10000});
+ const line=out.split(/\r?\n/).find(l=>l.startsWith('password='));
+ return line?line.slice('password='.length).trim():'';
+}
+
+const token=resolveToken();
 const spec=JSON.parse(readFileSync(resolve(specPath),'utf8'));
 const changes=spec.changes.map(c=>({
  path:c.path,
@@ -25,6 +35,7 @@ const changes=spec.changes.map(c=>({
 const report=await runOrchestratedMission(
  {...spec,changes},
  {
+  token,
   localSkillsDir:spec.localSkillsDir||process.env.HAK_LOCAL_SKILLS_DIR||'',
   publishDraftPr:publish,
   authorized,
