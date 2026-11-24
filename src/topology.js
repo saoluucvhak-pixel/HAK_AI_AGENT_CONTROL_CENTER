@@ -2,6 +2,7 @@ import {REPOSITORIES,safeRepo} from './github.js';
 export const COMPONENTS=Object.freeze([
  {id:'control',label:'HAK AI Agent Control Center',repo:'HAK_AI_AGENT_CONTROL_CENTER',status:'mvp'},
  {id:'skills',label:'HAK AI Skills',repo:'HAK_AI_SKILLS',status:'skill-catalog'},
+ {id:'warehouse',label:'HAK Kho Offline',repo:'HAK_KHO_OFFLINE',status:'external-repo'},
  {id:'quality',label:'HAK Code Quality',repo:'HAK_CODE_QUALITY_TEST',status:'external-repo'},
  {id:'ocr',label:'HAK OCR Engine',repo:'HAK_OCR_ENGINE',status:'external-repo'},
  {id:'filter',label:'HAK Smart Filter',repo:'HAK_SMART_FILTER',status:'external-repo'},
@@ -10,6 +11,7 @@ export const COMPONENTS=Object.freeze([
 ]);
 export const RELATIONS=Object.freeze([
  {from:'control',to:'skills',kind:'skill-reference',verified:false},
+ {from:'control',to:'warehouse',kind:'ci-review-target',verified:false},
  {from:'control',to:'quality',kind:'ci-review-target',verified:false},
  {from:'control',to:'ocr',kind:'future-telemetry',verified:false},
  {from:'control',to:'vcnb',kind:'audit-target',verified:false},
