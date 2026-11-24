@@ -5,12 +5,14 @@ export const COMPONENTS=Object.freeze([
  {id:'quality',label:'HAK Code Quality',repo:'HAK_CODE_QUALITY_TEST',status:'external-repo'},
  {id:'ocr',label:'HAK OCR Engine',repo:'HAK_OCR_ENGINE',status:'external-repo'},
  {id:'filter',label:'HAK Smart Filter',repo:'HAK_SMART_FILTER',status:'external-repo'},
- {id:'report',label:'HAK Accounting Report Standard',repo:'HAK_ACCOUNTING_REPORT_STANDARD',status:'external-repo'}
+ {id:'report',label:'HAK Accounting Report Standard',repo:'HAK_ACCOUNTING_REPORT_STANDARD',status:'external-repo'},
+ {id:'vcnb',label:'HAK VC NB — Đơn giá vận chuyển dăm',repo:'HAK_VC_NB',status:'product-repo'}
 ]);
 export const RELATIONS=Object.freeze([
  {from:'control',to:'skills',kind:'skill-reference',verified:false},
  {from:'control',to:'quality',kind:'ci-review-target',verified:false},
  {from:'control',to:'ocr',kind:'future-telemetry',verified:false},
+ {from:'control',to:'vcnb',kind:'audit-target',verified:false},
  {from:'skills',to:'filter',kind:'skill-guidance',verified:false},
  {from:'skills',to:'report',kind:'skill-guidance',verified:false}
 ]);

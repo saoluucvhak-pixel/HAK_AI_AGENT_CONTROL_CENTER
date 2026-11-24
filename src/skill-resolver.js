@@ -77,7 +77,7 @@ export async function loadSkillDefinition(skillName,{localSkillsDir='',fetchImpl
   const raw=readFileSync(file,'utf8');
   return {...parseSkillMarkdown(safeName,raw),source:'local-skill-catalog'};
  }
- if(fetchImpl===fetch&&existsSync(EMBEDDED_SKILLS_DIR)){
+ if((fetchImpl===fetch||!fetchImpl)&&existsSync(EMBEDDED_SKILLS_DIR)){
   let file=join(EMBEDDED_SKILLS_DIR,safeName,'SKILL.md');
   if(!existsSync(file))file=join(EMBEDDED_SKILLS_DIR,'skills',safeName,'SKILL.md');
   if(existsSync(file)){

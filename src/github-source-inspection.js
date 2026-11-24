@@ -1,6 +1,6 @@
 import {DEFAULT_OWNER,parseRepoTarget} from './github.js';
 const MAX_FILES=12;
-const MAX_BYTES=30000;
+const MAX_BYTES=100000;
 const HARD_MAX_BYTES=120000;
 const VALID_PATH=/^(?:src|tests|test|scripts|app|docs|desk|web|skills)\/(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\.(?:js|mjs|cjs|ts|tsx|json|py|md|html|css)$/;
 const VALID_ROOT=/^(?:README\.md|package\.json)$/;

@@ -9,7 +9,7 @@ test('pins content request to full SHA and returns source',async()=>{
  assert.match(urls[0],/ref=aaaaaaaa/);assert.equal(r.files[0].content,'test');assert.equal(r.patchGenerated,false);
 });
 test('missing file is reported, not guessed',async()=>{const r=await githubSourceInspection('HAK_AI_SKILLS',sha,['tests/x.test.js'],{fetchImpl:async()=>({status:404,ok:false})});assert.equal(r.files[0].status,'not-found')});
-test('oversized file not returned',async()=>{const r=await githubSourceInspection('HAK_AI_SKILLS',sha,['src/large.js'],{fetchImpl:async()=>({ok:true,json:async()=>({type:'file',encoding:'base64',size:50000,content:''})})});assert.equal(r.files[0].status,'unsupported-or-too-large')});
+test('oversized file not returned',async()=>{const r=await githubSourceInspection('HAK_AI_SKILLS',sha,['src/large.js'],{fetchImpl:async()=>({ok:true,json:async()=>({type:'file',encoding:'base64',size:150000,content:''})})});assert.equal(r.files[0].status,'unsupported-or-too-large')});
 test('requires SHA and allowlisted repository',async()=>{await assert.rejects(()=>githubSourceInspection('unknown',sha,['src/a.js']),/allowlisted/);await assert.rejects(()=>githubSourceInspection('HAK_AI_SKILLS','main',['src/a.js']),/SHA/)});
 
 test('allows only isolated acceptance txt fixture',()=>{

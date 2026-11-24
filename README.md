@@ -17,3 +17,19 @@ After pulling the latest `main`, double-click `HAK_ACCEPT_WINDOWS.cmd` to run lo
 4. Refresh the job list and choose **Xem kết quả AI**. Job metadata and outputs are stored under `data/agent-results` and restored on restart.
 
 This MVP requires a working gateway; it does not automatically install Claude, Gemini or OmniRoute, and it does not modify code or merge PRs. AI output is a proposal requiring human review. Do not use it for sensitive documents without an approved provider/data policy. If HAK is already running, close its existing process before restarting with new settings.
+
+## Kiểm tra và Thẩm định Repository khác (Repo Audit)
+
+Trên Windows (PowerShell), luôn sử dụng `npm.cmd` thay vì `npm`:
+
+```powershell
+# Kiểm tra repository bất kỳ (ví dụ HAK_VC_NB) và xuất báo cáo Markdown:
+npm.cmd run audit:repo -- HAK_VC_NB --md bao-cao.md --use-git-credential
+
+# Kiểm tra với danh sách tệp nguồn tùy chỉnh:
+npm.cmd run audit:repo -- HAK_VC_NB --paths "app/main/services/BackupService.js,app/main/reports/xlsxExport.js" --use-git-credential
+
+# Kiểm tra tính đồng bộ của danh mục Skills nhúng với upstream HAK_AI_SKILLS:
+npm.cmd run skills:check-sync -- --use-git-credential
+```
+
