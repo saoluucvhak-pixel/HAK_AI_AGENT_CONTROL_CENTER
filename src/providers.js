@@ -53,6 +53,7 @@ class BaseAdapter{
  }
  async _http(method,path,{body,headers={},signal}={}){
   const {base}=parseEndpoint(this.conn.endpoint);
+  if(signal?.aborted)throw new ProviderError('CANCELLED','Đã hủy yêu cầu');
   const timeout=AbortSignal.timeout(this.conn.timeoutMs);
   const combined=signal?AbortSignal.any([signal,timeout]):timeout;
   let response;

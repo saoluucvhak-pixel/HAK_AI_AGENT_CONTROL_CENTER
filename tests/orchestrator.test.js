@@ -147,7 +147,7 @@ test('cancel stops running work, marks tasks CANCELLED and revokes approval',asy
  try{
   const o=await s.orchestrator.create(input({agents:['architecture','backend']}));
   await s.orchestrator.approve(o.id);await s.orchestrator.start(o.id);
-  await new Promise(r=>setTimeout(r,50));
+  for(let i=0;i<300&&held.length<1;i++)await new Promise(r=>setTimeout(r,10)); // wait until the model call is really in flight
   const done=await s.orchestrator.cancel(o.id,'local-operator','Dừng thử');
   assert.equal(done.status,'CANCELLED');
   assert.ok(held.length>=1);

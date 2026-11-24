@@ -77,3 +77,11 @@ test('health check reports live connectivity without claiming provider identity'
   assert.equal(h.ok,true);assert.equal(h.stage,'live-connectivity');assert.equal(h.identityVerified,false);assert.equal(h.modelCount,2);
  }finally{await s.cleanup();}
 });
+
+test('an already-aborted signal is refused before any request is sent',async()=>{
+ let sent=0;
+ const a=createAdapter({...base,type:'openai-compatible',endpoint:'https://gw.example.com'},{secret:'k'.repeat(20),fetchImpl:async()=>{sent++;return jsonResponse({});}});
+ const ctl=new AbortController();ctl.abort();
+ await assert.rejects(()=>a.executeTask({prompt:'x',signal:ctl.signal}),e=>e.code==='CANCELLED');
+ assert.equal(sent,0);
+});
