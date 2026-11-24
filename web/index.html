@@ -88,6 +88,31 @@
             </div>
           </form>
           <p id="pr-message" role="status"></p>
+
+          <hr style="border: 0; border-top: 1px solid var(--border); margin: 20px 0;">
+          <h3>Gọi Orca Agent (stablyai/orca)</h3>
+          <p>Khởi chạy agent qua Orca CLI cục bộ (yêu cầu bật <code>HAK_ORCA_EXECUTION_ENABLED=true</code> trong <code>.env</code>).</p>
+          <form id="orca-launch-form" class="form-stack">
+            <div class="form-row">
+              <label>Agent Orca
+                <select id="orca-agent">
+                  <option value="codex">Codex</option>
+                  <option value="claude">Claude Code</option>
+                  <option value="grok">Grok</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="cursor">Cursor</option>
+                  <option value="kiro">Kiro</option>
+                </select>
+              </label>
+              <label>Worktree <input id="orca-worktree" value="current" maxlength="100" required></label>
+            </div>
+            <label>Lệnh / Prompt cho Orca <textarea id="orca-prompt" maxlength="8000" required placeholder="Nhập yêu cầu cho Orca bot..."></textarea></label>
+            <label><input type="checkbox" id="orca-confirm" required> Tôi xác nhận khởi chạy Orca Agent cục bộ</label>
+            <div class="form-actions">
+              <button type="submit" class="btn-secondary">Gọi Orca Agent</button>
+            </div>
+          </form>
+          <p id="orca-message" role="status"></p>
         </div>
       </div>
 

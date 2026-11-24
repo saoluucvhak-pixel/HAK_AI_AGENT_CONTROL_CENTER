@@ -211,5 +211,17 @@ $('github-pr-form').addEventListener('submit',async e=>{
  }catch(error){$('pr-message').textContent=error.message;}
  finally{button.disabled=false;}
 });
+$('orca-launch-form')?.addEventListener('submit',async e=>{
+ e.preventDefault();
+ const button=$('orca-launch-form').querySelector('button[type=submit]');
+ button.disabled=true;$('orca-message').textContent='Đang gọi Orca Agent…';
+ try{
+  const r=await fetch('/api/orca/launch',{method:'POST',headers:{'Content-Type':'application/json','X-HAK-Operator-Token':operatorToken},body:JSON.stringify({agent:$('orca-agent').value,worktree:$('orca-worktree').value.trim(),prompt:$('orca-prompt').value,confirm:$('orca-confirm').checked})});
+  const result=await r.json();
+  if(!r.ok)throw Error(result.error||'Orca launch failed');
+  $('orca-message').textContent='Đã khởi chạy Orca ('+result.agent+' / '+result.worktree+')'+(result.sessionId?' · Session: '+result.sessionId:'');
+ }catch(error){$('orca-message').textContent=error.message;}
+ finally{button.disabled=false;}
+});
 $('refresh-jobs').addEventListener('click',refreshJobs);
 operatorSession();refreshJobs();loadAllowedRepos();

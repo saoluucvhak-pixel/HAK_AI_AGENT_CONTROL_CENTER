@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {probeOrca} from '../src/orca-probe.js';
+import {probeOrca,launchOrcaAgent} from '../src/orca-probe.js';
 test('disabled Orca probe never executes',()=>{
   assert.deepEqual(probeOrca({run:()=>{throw Error('unexpected')}}),{status:'disabled',connected:false});
 });
@@ -46,4 +46,23 @@ test('Orca probe does not treat arbitrary JSON or explicit disconnected state as
   assert.equal(result.connected,false);
  }
  assert.deepEqual(probeOrca({enabled:true,run:()=>({status:0,stdout:'{"connected":true}'})}),{status:'reachable',connected:true});
+});
+
+test('launchOrcaAgent enforces enabled, confirm, allowlisted agent, and safe env without shell',()=>{
+ assert.deepEqual(launchOrcaAgent({prompt:'hi',confirm:true,run:()=>{throw Error('unexpected');}}),{ok:false,status:'disabled',error:'Orca execution disabled; set HAK_ORCA_EXECUTION_ENABLED=true'});
+ assert.throws(()=>launchOrcaAgent({enabled:true,confirm:false,prompt:'hi'}),/Explicit confirmation/);
+ assert.throws(()=>launchOrcaAgent({enabled:true,confirm:true,agent:'evil-sh',prompt:'hi'}),/Unsupported Orca agent/);
+ assert.throws(()=>launchOrcaAgent({enabled:true,confirm:true,agent:'codex',worktree:'../escape',prompt:'hi'}),/Invalid Orca worktree/);
+
+ let call;
+ const res=launchOrcaAgent({
+  enabled:true,confirm:true,agent:'claude',worktree:'current',prompt:'Fix tests',
+  env:{PATH:'/usr/bin',ORCA_CLI_COMMAND:'orca-ide',GITHUB_TOKEN:'secret'},
+  run:(cmd,args,opts)=>{call={cmd,args,opts};return {status:0,stdout:'{"sessionId":"sess-123"}'};}
+ });
+ assert.deepEqual(res,{ok:true,status:'launched',agent:'claude',worktree:'current',sessionId:'sess-123'});
+ assert.equal(call.cmd,'orca-ide');
+ assert.deepEqual(call.args,['agent','launch','claude','--worktree','current','--prompt','Fix tests','--json']);
+ assert.equal(call.opts.shell,false);
+ assert.equal(Object.hasOwn(call.opts.env,'GITHUB_TOKEN'),false);
 });
