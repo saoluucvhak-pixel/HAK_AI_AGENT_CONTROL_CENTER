@@ -9,13 +9,13 @@ const SKILL_NAME=/^[a-z0-9][a-z0-9-]{0,79}$/;
 const uniqueHints=list=>[...new Set(list)];
 
 const ROLE_SKILL_HINTS={
- architecture:uniqueHints(['writing-plans','brainstorming','hak-archify-architecture','archify','security-audit','find-skills','hak-code-auditor']),
- ui:uniqueHints(['agent-browser','web-interface-guidelines','hak-ui-designer','hak-ui-ux-pro-max','hak-vercel-web-design','hak-unslop-design']),
+ architecture:uniqueHints(['writing-plans','brainstorming','swarm-orchestration','sparc-methodology','hak-archify-architecture','archify','security-audit','find-skills','hak-code-auditor']),
+ ui:uniqueHints(['unslop','agent-browser','web-interface-guidelines','hak-ui-designer','hak-ui-ux-pro-max','hak-vercel-web-design','hak-unslop-design']),
  backend:uniqueHints(['fix-finding','systematic-debugging','executing-plans','security-diff-scan','find-skills','hak-code-auditor','hak-data-integrity','hak-migration-manager']),
  data:uniqueHints(['hak-parent-child-data-model','hak-data-integrity','hak-smart-filter']),
  security:uniqueHints(['security-audit','security-scan','triage-finding','check-skills','hak-electron-security','hak-code-auditor']),
  testing:uniqueHints(['test-driven-development','systematic-debugging','verification-before-completion','agent-browser','triage-finding','verify-fix','security-audit','hak-code-auditor','hak-payroll-validator']),
- quality:uniqueHints(['verification-before-completion','requesting-code-review','agent-browser','web-interface-guidelines','verify-fix','security-diff-scan','security-audit','hak-code-auditor','hak-unslop-design']),
+ quality:uniqueHints(['verification-before-completion','requesting-code-review','github-code-review','unslop','agent-browser','web-interface-guidelines','verify-fix','security-diff-scan','security-audit','hak-code-auditor','hak-unslop-design']),
  release:uniqueHints(['finishing-a-development-branch','hak-release-builder']),
  ocr:uniqueHints(['hak-document-markdown','hak-accounting-report'])
 };
@@ -24,6 +24,8 @@ const SOURCE_PRIORITY=[
  'local:',
  'github:saoluucvhak-pixel/HAK_AI_SKILLS',
  'github:obra/superpowers',
+ 'github:ruvnet/ruflo',
+ 'github:heydamir/unslop',
  'github:openai/codex-security',
  'github:cloudflare/security-audit-skill',
  'github:Asymptote-Labs/agent-beacon',
@@ -75,6 +77,7 @@ export function validateStructuredFindings(findings){
 }
 
 const SKILL_REPO_BASE_PATHS={
+ 'ruvnet/ruflo':'.claude/skills',
  'openai/codex-security':'plugins/codex-security/skills',
  'Asymptote-Labs/agent-beacon':'agent-skills/skills'
 };

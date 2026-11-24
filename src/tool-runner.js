@@ -63,6 +63,20 @@ export function buildInternalFallbackAnswer({prompt,role='backend',targetRepo=nu
  },null,2);
 }
 
+export function probeRuflo({enabled=false,run=spawnSync,env=process.env}={}){
+ if(!enabled)return {status:'disabled',connected:false};
+ try{
+  const result=run('ruflo',['--version'],{
+   encoding:'utf8',timeout:5000,maxBuffer:65536,windowsHide:true,shell:false,env:safeCliEnv(env)
+  });
+  if(result.error||result.status!==0||result.signal)return {status:'unavailable',connected:false};
+  const out=typeof result.stdout==='string'?result.stdout.trim():'';
+  return out?{status:'reachable',connected:true}:{status:'unverified',connected:false};
+ }catch{
+  return {status:'unavailable',connected:false};
+ }
+}
+
 export function executeWithExternalFallback({
  prompt,
  role='backend',
@@ -71,10 +85,12 @@ export function executeWithExternalFallback({
  agent='codex',
  worktree='current',
  orcaEnabled=false,
+ rufloEnabled=false,
  confirm=true,
  run=spawnSync,
  env=process.env
 }={}){
+ let reason='orca-disabled';
  if(orcaEnabled&&confirm===true){
   const launched=launchOrcaAgent({prompt,agent,worktree,enabled:true,confirm:true,run,env});
   if(launched.ok){
@@ -85,16 +101,23 @@ export function executeWithExternalFallback({
     runner:'orca'
    };
   }
-  return {
-   model:'hak-internal-fallback',
-   answer:buildInternalFallbackAnswer({prompt,role,targetRepo,skills,reason:'orca-'+launched.status}),
-   fallbackUsed:true,
-   runner:'internal-fallback'
-  };
+  reason='orca-'+launched.status;
+ }
+ if(rufloEnabled&&confirm===true){
+  const ruflo=probeRuflo({enabled:true,run,env});
+  if(ruflo.connected){
+   return {
+    model:'ruflo:swarm',
+    answer:JSON.stringify({ok:true,status:'delegated-to-ruflo',role,targetRepo:targetRepo||null,appliedSkills:(Array.isArray(skills)?skills:[]).map(s=>s?.name).filter(Boolean)},null,2),
+    fallbackUsed:false,
+    runner:'ruflo'
+   };
+  }
+  reason+=';ruflo-'+ruflo.status;
  }
  return {
   model:'hak-internal-fallback',
-  answer:buildInternalFallbackAnswer({prompt,role,targetRepo,skills,reason:'orca-disabled'}),
+  answer:buildInternalFallbackAnswer({prompt,role,targetRepo,skills,reason}),
   fallbackUsed:true,
   runner:'internal-fallback'
  };
