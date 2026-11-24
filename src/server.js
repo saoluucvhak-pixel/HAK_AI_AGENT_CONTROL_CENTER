@@ -21,6 +21,7 @@ import {topology,toMermaid} from './topology.js';
 import {acceptanceReport} from './acceptance.js';
 import {probeTools} from './readiness-probes.js';
 import {evidenceSnapshot} from './evidence.js';
+import {launchOrcaAgent} from './orca-probe.js';
 const htmlPath=fileURLToPath(new URL('../web/index.html',import.meta.url));
 const port=Number(process.env.PORT||4317);
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid PORT');
@@ -213,6 +214,30 @@ export const server=createServer(async(req,res)=>{
     });
     const result=await executeGithubPatchProposal(proposal,{branch:body.branch.trim(),authorized:true,allowAnyTarget:true});
     sendJson(res,201,result);
+   }catch(err){sendJson(res,400,{error:String(err.message||err)});}
+   return;
+  }
+  if(path==='/api/orca/launch'&&req.method==='POST'){
+   const origin=req.headers.origin;
+   const expected='http://127.0.0.1:'+port;
+   if(origin!==expected||!authorized(req)){sendJson(res,403,{error:'Local operator session required'});return;}
+   if(process.env.HAK_ORCA_EXECUTION_ENABLED!=='true'){
+    sendJson(res,503,{error:'Orca execution disabled. Set HAK_ORCA_EXECUTION_ENABLED=true in .env first.'});return;
+   }
+   let body;
+   try{
+    body=await readBody(req);
+    if(!body||typeof body!=='object'||Array.isArray(body)||body.confirm!==true)throw Error('Invalid request');
+   }catch{sendJson(res,400,{error:'Invalid Orca launch request or missing confirmation'});return;}
+   try{
+    const launched=launchOrcaAgent({
+     prompt:body.prompt,
+     agent:typeof body.agent==='string'&&body.agent?body.agent:'codex',
+     worktree:typeof body.worktree==='string'&&body.worktree?body.worktree:'current',
+     enabled:true,
+     confirm:true
+    });
+    sendJson(res,launched.ok?200:502,launched);
    }catch(err){sendJson(res,400,{error:String(err.message||err)});}
    return;
   }
