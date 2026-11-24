@@ -45,7 +45,7 @@ test('security + multi-agent HTTP flow on a real server, with restart persistenc
   const gwPort=gateway.address().port;
   const port=41000+Math.floor(Math.random()*20000);
   const base='http://127.0.0.1:'+port;
-  const env={...process.env,PORT:String(port),HAK_DATA_DIR:dir,NODE_ENV:'production'};
+  const env={...process.env,PORT:String(port),HAK_DATA_DIR:dir,NODE_ENV:'production',HAK_SANDBOX:process.env.HAK_SANDBOX||'off'};
   delete env.HAK_OMNIROUTE_ENABLED;delete env.HAK_AGENT_EXECUTION_ENABLED;
   const launch=()=>{const c=spawn(process.execPath,['src/server.js'],{cwd:root,env,stdio:['ignore','ignore','pipe']});c.hakStderr='';c.stderr.on('data',d=>{c.hakStderr=(c.hakStderr+d).slice(-2000)});return c;};
   child=launch();await ready(base,child);
