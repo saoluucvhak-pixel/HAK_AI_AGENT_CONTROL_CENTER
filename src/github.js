@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 
 export const DEFAULT_OWNER='saoluucvhak-pixel';
-export const REPOSITORIES=Object.freeze(['HAK_AI_AGENT_CONTROL_CENTER','HAK_AI_SKILLS','HAK_KHO_OFFLINE','HAK_CODE_QUALITY_TEST','HAK_OCR_ENGINE','HAK_SMART_FILTER','HAK_ACCOUNTING_REPORT_STANDARD']);
+export const REPOSITORIES=Object.freeze(['HAK_AI_AGENT_CONTROL_CENTER','HAK_AI_SKILLS','HAK_CODE_QUALITY_TEST','HAK_OCR_ENGINE','HAK_SMART_FILTER','HAK_ACCOUNTING_REPORT_STANDARD']);
 const REPO_SLUG=/^[A-Za-z0-9_.-]{1,100}$/;
 const CONFIG_PATH=fileURLToPath(new URL('../config/repos.json',import.meta.url));
 

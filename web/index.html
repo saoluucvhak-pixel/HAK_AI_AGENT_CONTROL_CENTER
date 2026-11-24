@@ -1,1 +1,147 @@
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HAK AI Operations</title><link rel="stylesheet" href="/style.css"></head><body><header><div><h1>HAK AI Operations</h1><p>Trạng thái GitHub thực tế · đọc dữ liệu, không tự merge</p></div><button id="refresh" type="button">Làm mới</button></header><main><section aria-label="Tổng quan" class="stats"><article><strong id="repos-count">—</strong><span>Repository theo dõi</span></article><article><strong id="prs-count">—</strong><span>PR đang mở</span></article><article><strong id="ci-count">—</strong><span>CI thành công (lần chạy gần nhất)</span></article><article><strong id="errors-count">—</strong><span>Nguồn chưa truy cập được</span></article></section><section><h2>Giao việc cho AI</h2><p>Chạy AI thật qua OmniRoute cục bộ khi đã cấu hình. Kết quả lưu trong thư mục data/agent-results trên máy, không tự sửa mã nguồn.</p><form id="agent-job-form"><label>Tên công việc <input id="job-title" maxlength="160" required></label><label>Mô tả <textarea id="job-description" maxlength="4000" required></textarea></label><label>Agent <select id="job-role"><option value="architecture">Kiến trúc</option><option value="backend">Backend</option><option value="ui">Giao diện</option><option value="testing">Kiểm thử</option><option value="quality">Chất lượng</option><option value="security">Bảo mật</option><option value="data">Dữ liệu</option><option value="ocr">OCR</option></select></label><label>Repo dự án đích (gõ tự do owner/repo hoặc chọn gợi ý) <input id="job-target-repo" list="allowed-repos-list" maxlength="200" placeholder="vd: saoluucvhak-pixel/ERP hoặc owner/repo"><datalist id="allowed-repos-list"></datalist></label><label>Commit SHA (tùy chọn, 40 ký tự) <input id="job-commit-sha" maxlength="40" placeholder="vd: a1b2c3..."></label><label>CI Run ID (tùy chọn) <input id="job-run-id" type="number" min="1" placeholder="vd: 123456"></label><label>Files cần đọc (tùy chọn, cách nhau bởi dấu phẩy) <input id="job-paths" maxlength="400" placeholder="vd: src/index.js, package.json"></label><label>Skills áp dụng (cách nhau bởi dấu phẩy) <input id="job-skills" placeholder="vd: hak-code-auditor, fix-finding" maxlength="240"></label><label><input type="checkbox" id="job-fix-verify"> Chạy chuỗi Test → Sửa → Xác minh (codex-security: triage → fix → verify)</label><button type="button" id="find-skills-btn">Tìm Skill phù hợp</button><div id="skill-suggestions" class="cards"></div><label><input type="checkbox" id="job-confirm" required> Tôi phê duyệt gửi nội dung không nhạy cảm đến mô hình AI đã cấu hình</label><button type="submit">Chạy AI Agent</button></form><p id="job-message" role="status">Đang kiểm tra cấu hình AI…</p><button id="refresh-jobs" type="button">Cập nhật công việc</button><div id="operator-jobs" class="cards"></div><h3>Tạo Draft PR trên GitHub</h3><p>Yêu cầu bật HAK_GITHUB_WRITE_ENABLED=true và GITHUB_TOKEN trong .env. Chỉ tạo Draft PR trên nhánh hak-fix/*, không tự merge.</p><form id="github-pr-form"><label>Nhánh fix (hak-fix/...) <input id="pr-branch" value="hak-fix/ai-patch" maxlength="60" required></label><label>Proposal / Kết quả AI (JSON changes) <textarea id="pr-output" maxlength="30000" required placeholder='{"rationale":"Fix bug","changes":[{"path":"src/a.js","expectedBlobSha":"...","newContent":"..."}]}'></textarea></label><label><input type="checkbox" id="pr-confirm" required> Tôi xác nhận tạo Draft PR lên GitHub cho repo đích đã chọn</label><button type="submit">Tạo Draft PR trên GitHub</button></form><p id="pr-message" role="status"></p></section><section><h2>Repository và CI</h2><p id="status" role="status">Đang tải dữ liệu…</p><div id="repos" class="cards"></div></section><section><h2>Task Observer · Agent đang chạy</h2><p>Chỉ hiển thị sự kiện đã gửi vào Observer cục bộ. Trạng thái được đọc tự động, không cần nhập token.</p><button type="button" id="load-agents">Làm mới trạng thái Agent</button><p id="agent-status" role="status">Chưa kết nối</p><div id="agents" class="cards"></div></section><section><h2>Sơ đồ kiến trúc nguồn HAK</h2><p>Các quan hệ hiện là đề xuất, chưa xác minh kết nối runtime. Xuất Mermaid để kiểm tra hoặc đưa vào Archify sau.</p><p><a href="/api/topology.mmd" target="_blank" rel="noopener noreferrer">Xem sơ đồ Mermaid</a></p><div id="topology" class="cards"></div></section><section><h2>Kiểm tra kết nối công cụ</h2><p>Chỉ kiểm tra các dịch vụ HTTP trên máy này. Kết nối thành công không đồng nghĩa AI Agent đã hoạt động hoặc đạt nghiệm thu.</p><button type="button" id="check-tools">Kiểm tra toàn bộ hệ thống</button><p id="diagnostics-status" role="status">Chưa kiểm tra</p><div id="diagnostics" class="cards"></div></section><section><h2>Biên bản bằng chứng nghiệm thu</h2><p>Xuất kết quả kiểm tra cục bộ và các hạng mục còn thiếu. Không xuất token, nội dung sự kiện hoặc dữ liệu nghiệp vụ.</p><a href="/api/evidence" download="hak-acceptance-evidence.json">Xuất báo cáo nghiệm thu JSON</a></section><section><h2>Nghiệm thu AI Agent và công cụ</h2><p>Trạng thái bằng chứng kiểm thử; không đồng nghĩa đã kết nối provider thật.</p><div id="acceptance" class="cards"></div></section><section><h2>Các lớp hệ thống</h2><div class="layers"><article><h3>Kiến trúc · Archify</h3><p>Chưa kết nối runtime; cần sơ đồ dựa trên mã nguồn và commit xác minh.</p></article><article><h3>Agent · Task Observer</h3><p>Có thể nhận sự kiện agent qua API cục bộ có xác thực; chưa có adapter Ruflo thực tế.</p></article><article><h3>Model · OmniRoute</h3><p>Chưa có số liệu token, chi phí hoặc model trực tiếp.</p></article><article><h3>OCR · HAK OCR Engine</h3><p>Chưa có thống kê độ chính xác hay chứng từ thực tế.</p></article></div></section></main><footer>Chỉ truy vấn GitHub API. Không gửi dữ liệu nghiệp vụ tới nhà cung cấp AI.</footer><script type="module" src="/app.js"></script></body></html>
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>HAK AI Operations</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>HAK AI Operations</h1>
+      <p>Trung tâm điều phối AI đa-repo &amp; đa-skill · đọc dữ liệu thực tế, không tự merge</p>
+    </div>
+    <button id="refresh" type="button">Làm mới dữ liệu</button>
+  </header>
+
+  <main>
+    <section aria-label="Tổng quan" class="stats">
+      <article><strong id="repos-count">—</strong><span>Repository theo dõi</span></article>
+      <article><strong id="prs-count">—</strong><span>PR đang mở</span></article>
+      <article><strong id="ci-count">—</strong><span>CI thành công gần nhất</span></article>
+      <article><strong id="errors-count">—</strong><span>Nguồn chưa truy cập được</span></article>
+    </section>
+
+    <section>
+      <h2>Điều phối AI &amp; GitHub</h2>
+      <div class="workspace-grid">
+        <div class="panel-card">
+          <h3>Giao việc cho AI</h3>
+          <p>Chạy AI thật qua OmniRoute cục bộ. Kết quả lưu tại <code>data/agent-results</code>, không tự ý sửa mã nguồn.</p>
+          <form id="agent-job-form" class="form-stack">
+            <div class="form-row">
+              <label>Tên công việc <input id="job-title" maxlength="160" required placeholder="vd: Sửa lỗi test hoặc review bảo mật"></label>
+              <label>Agent
+                <select id="job-role">
+                  <option value="architecture">Kiến trúc</option>
+                  <option value="backend">Backend</option>
+                  <option value="ui">Giao diện</option>
+                  <option value="testing">Kiểm thử</option>
+                  <option value="quality">Chất lượng</option>
+                  <option value="security">Bảo mật</option>
+                  <option value="data">Dữ liệu</option>
+                  <option value="ocr">OCR</option>
+                </select>
+              </label>
+            </div>
+
+            <label>Mô tả yêu cầu <textarea id="job-description" maxlength="4000" required placeholder="Mô tả chi tiết việc cần AI test, viết code hoặc sửa lỗi..."></textarea></label>
+
+            <div class="form-row">
+              <label>Repo dự án đích (gõ tự do owner/repo)
+                <input id="job-target-repo" list="allowed-repos-list" maxlength="200" placeholder="vd: saoluucvhak-pixel/unslop">
+                <datalist id="allowed-repos-list"></datalist>
+              </label>
+              <label>Skills áp dụng (cách nhau bởi dấu phẩy)
+                <input id="job-skills" placeholder="vd: fix-finding, security-audit" maxlength="240">
+              </label>
+            </div>
+
+            <div class="form-row">
+              <label>Commit SHA (tùy chọn, 40 ký tự) <input id="job-commit-sha" maxlength="40" placeholder="vd: a1b2c3..."></label>
+              <label>CI Run ID (tùy chọn) <input id="job-run-id" type="number" min="1" placeholder="vd: 123456"></label>
+              <label>Files cần đọc (tùy chọn) <input id="job-paths" maxlength="400" placeholder="vd: src/index.js, package.json"></label>
+            </div>
+
+            <label><input type="checkbox" id="job-fix-verify"> Chạy chuỗi Test → Sửa → Xác minh (codex-security: triage → fix → verify)</label>
+            <label><input type="checkbox" id="job-confirm" required> Tôi phê duyệt gửi nội dung không nhạy cảm đến mô hình AI đã cấu hình</label>
+
+            <div class="form-actions">
+              <button type="submit">Chạy AI Agent</button>
+              <button type="button" id="find-skills-btn" class="btn-secondary">Tìm Skill phù hợp</button>
+            </div>
+            <div id="skill-suggestions" class="cards"></div>
+          </form>
+          <p id="job-message" role="status">Đang kiểm tra cấu hình AI…</p>
+        </div>
+
+        <div class="panel-card">
+          <h3>Tạo Draft PR trên GitHub</h3>
+          <p>Yêu cầu bật <code>HAK_GITHUB_WRITE_ENABLED=true</code> và <code>GITHUB_TOKEN</code> trong <code>.env</code>. Chỉ tạo Draft PR trên nhánh <code>hak-fix/*</code>.</p>
+          <form id="github-pr-form" class="form-stack">
+            <label>Nhánh fix (hak-fix/...) <input id="pr-branch" value="hak-fix/ai-patch" maxlength="60" required></label>
+            <label>Proposal / Kết quả AI (JSON changes) <textarea id="pr-output" maxlength="30000" required placeholder='{"rationale":"Fix bug","changes":[{"path":"src/a.js","expectedBlobSha":"...","newContent":"..."}]}'></textarea></label>
+            <label><input type="checkbox" id="pr-confirm" required> Tôi xác nhận tạo Draft PR lên GitHub cho repo đích đã chọn</label>
+            <div class="form-actions">
+              <button type="submit">Tạo Draft PR trên GitHub</button>
+            </div>
+          </form>
+          <p id="pr-message" role="status"></p>
+        </div>
+      </div>
+
+      <div style="margin-top: 18px;">
+        <div class="form-actions">
+          <button id="refresh-jobs" type="button" class="btn-secondary">Cập nhật danh sách công việc</button>
+        </div>
+        <div id="operator-jobs" class="cards" style="margin-top: 12px;"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Repository và CI</h2>
+      <p id="status" role="status">Đang tải dữ liệu…</p>
+      <div id="repos" class="cards"></div>
+    </section>
+
+    <section>
+      <h2>Task Observer · Agent đang chạy</h2>
+      <p>Chỉ hiển thị sự kiện đã gửi vào Observer cục bộ. Trạng thái được đọc tự động, không cần nhập token.</p>
+      <button type="button" id="load-agents" class="btn-secondary">Làm mới trạng thái Agent</button>
+      <p id="agent-status" role="status">Chưa kết nối</p>
+      <div id="agents" class="cards"></div>
+    </section>
+
+    <section>
+      <h2>Sơ đồ kiến trúc nguồn HAK</h2>
+      <p>Các quan hệ hiện là đề xuất, chưa xác minh kết nối runtime. <a href="/api/topology.mmd" target="_blank" rel="noopener noreferrer">Xem sơ đồ Mermaid</a></p>
+      <div id="topology" class="cards"></div>
+    </section>
+
+    <section>
+      <h2>Kiểm tra kết nối &amp; Nghiệm thu</h2>
+      <div class="form-actions" style="margin-bottom: 12px;">
+        <button type="button" id="check-tools" class="btn-secondary">Kiểm tra toàn bộ hệ thống</button>
+        <a href="/api/evidence" download="hak-acceptance-evidence.json" class="btn-link">Xuất báo cáo nghiệm thu JSON</a>
+      </div>
+      <p id="diagnostics-status" role="status">Chưa kiểm tra</p>
+      <div id="diagnostics" class="cards"></div>
+      <div id="acceptance" class="cards" style="margin-top: 14px;"></div>
+    </section>
+
+    <section>
+      <h2>Các lớp hệ thống</h2>
+      <div class="layers">
+        <article><h3>Kiến trúc · Archify</h3><p>Chưa kết nối runtime; cần sơ đồ dựa trên mã nguồn và commit xác minh.</p></article>
+        <article><h3>Agent · Task Observer</h3><p>Có thể nhận sự kiện agent qua API cục bộ có xác thực; chưa có adapter Ruflo thực tế.</p></article>
+        <article><h3>Model · OmniRoute</h3><p>Chưa có số liệu token, chi phí hoặc model trực tiếp.</p></article>
+        <article><h3>OCR · HAK OCR Engine</h3><p>Chưa có thống kê độ chính xác hay chứng từ thực tế.</p></article>
+      </div>
+    </section>
+  </main>
+
+  <footer>Chỉ truy vấn GitHub API. Không gửi dữ liệu nghiệp vụ tới nhà cung cấp AI.</footer>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

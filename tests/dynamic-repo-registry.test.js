@@ -4,8 +4,8 @@ import {parseRepoRef,safeRepo,getAllowedRepositories} from '../src/github.js';
 import {safeSourcePath} from '../src/github-source-inspection.js';
 
 test('parseRepoRef resolves short names and allowlisted owner/repo refs',()=>{
- const a=parseRepoRef('HAK_KHO_OFFLINE');
- assert.equal(a.fullName,'saoluucvhak-pixel/HAK_KHO_OFFLINE');
+ const a=parseRepoRef('HAK_OCR_ENGINE');
+ assert.equal(a.fullName,'saoluucvhak-pixel/HAK_OCR_ENGINE');
  const b=parseRepoRef('vercel-labs/skills');
  assert.equal(b.owner,'vercel-labs');
  assert.equal(b.repo,'skills');
