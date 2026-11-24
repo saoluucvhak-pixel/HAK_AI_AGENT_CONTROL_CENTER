@@ -191,7 +191,7 @@ async function ccCard(id){
  card.append(row,msg);return card;
 }
 $('repo-form').addEventListener('submit',async ev=>{ev.preventDefault();
- try{await api('/code/repos','POST',{name:$('r-name').value,path:$('r-path').value,githubRepo:$('r-gh').value||null,defaultBranch:$('r-branch').value||'main',defaultVerify:$('r-verify').value});say('cc-message','Đã đăng ký repository.');$('repo-form').reset();$('r-branch').value='main';await loadCode();}
+ try{await api('/code/repos','POST',{name:$('r-name').value,path:$('r-path').value,githubRepo:$('r-gh').value||null,defaultBranch:$('r-branch').value||'main',defaultVerify:$('r-verify').value});say('cc-message','Đã đăng ký repository.');$('repo-form').reset();$('r-branch').value='main';await loadCode();await loadReviews();}
  catch(e){say('cc-message','Không đăng ký được: '+explain(e),true);}});
 $('token-form').addEventListener('submit',async ev=>{ev.preventDefault();
  try{await api('/code/github-token','PUT',{token:$('gh-token').value});$('gh-token').value='';say('cc-message','Đã lưu token trong kho bí mật.');}
