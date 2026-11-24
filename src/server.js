@@ -33,6 +33,9 @@ const htmlPath=fileURLToPath(new URL('../web/index.html',import.meta.url));
 const port=Number(process.env.PORT||4317);
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid PORT');
 const host='127.0.0.1';
+// Containers need the process to listen on all interfaces while the host publishes the port to loopback only. Opt-in, and the Host/Origin/token guards stay on.
+const bindHost=process.env.HAK_BIND||host;
+if(!['127.0.0.1','::1','0.0.0.0'].includes(bindHost))throw new Error('HAK_BIND phải là 127.0.0.1, ::1 hoặc 0.0.0.0');
 const observerToken=process.env.HAK_OBSERVER_TOKEN||randomBytes(32).toString('hex');
 const observerStore=new EventStore(process.env.HAK_EVENT_STORE_PATH||dataPath(process.env,'agent-events.jsonl'));
 await observerStore.load();
@@ -227,4 +230,4 @@ export const server=createServer(async(req,res)=>{
   res.writeHead(404);res.end('Not Found');
  }catch(e){res.writeHead(500,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'Dashboard unavailable'}));}
 });
-if(process.env.NODE_ENV!=='test')server.listen(port,host,()=>{console.log('HAK dashboard on http://'+host+':'+port);void migrateLegacyGateway();});
+if(process.env.NODE_ENV!=='test')server.listen(port,bindHost,()=>{console.log('HAK dashboard on http://'+bindHost+':'+port);if(bindHost==='0.0.0.0')console.warn('CẢNH BÁO: đang nghe mọi giao diện. Chỉ publish cổng về loopback của máy chủ (docker -p 127.0.0.1:4317:4317).');void migrateLegacyGateway();});

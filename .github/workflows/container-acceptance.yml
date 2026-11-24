@@ -1,0 +1,59 @@
+name: Container acceptance
+# Builds the image and proves the tool works inside a hardened container: non-root, no network, read-only root FS,
+# no capabilities. This is the acceptance evidence for the container/CI deployment.
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'src/**'
+      - 'scripts/hak.mjs'
+      - 'tests/**'
+      - '.github/workflows/container-acceptance.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  container:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build runtime and acceptance images
+        run: |
+          docker build --target runtime -t hak:runtime .
+          docker build --target acceptance -t hak:acceptance .
+      - name: Runtime image runs as a non-root user and prints help
+        run: |
+          test "$(docker run --rm --entrypoint id hak:runtime -u)" = "10001"
+          docker run --rm hak:runtime help | head -5
+      - name: Repository test-suite inside the hardened container
+        run: |
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:rw,exec --tmpfs /data:rw,uid=10001 \
+            --cap-drop ALL --security-opt no-new-privileges --pids-limit 512 --memory 2g \
+            -e HOME=/tmp -e HAK_SANDBOX=container \
+            hak:acceptance tests/cli.test.js tests/workspace.test.js tests/code-change.test.js tests/repo-review.test.js tests/approvals.test.js tests/orchestrator.test.js
+      - name: Review a read-only bind-mounted repository owned by another uid
+        run: |
+          set -u
+          D="$(mktemp -d)"
+          git init -q -b main "$D/bad"
+          printf '%s\n' "new BrowserWindow({webPreferences:{ nodeIntegration: true }});" > "$D/bad/main.js"
+          git -C "$D/bad" add -A && git -C "$D/bad" -c user.name=t -c user.email=t@t commit -q -m init
+          git init -q -b main "$D/clean"
+          printf '%s\n' "export const a = 1;" > "$D/clean/a.js"
+          git -C "$D/clean" add -A && git -C "$D/clean" -c user.name=t -c user.email=t@t commit -q -m init
+          run() { docker run --rm --network none --read-only --tmpfs /tmp:rw,exec --cap-drop ALL --security-opt no-new-privileges \
+                    -e HOME=/tmp -v "$1:/work:ro" hak:runtime review --repo /work --fail-on error --json /tmp/r.json; }
+          set +e; run "$D/bad"; rc_bad=$?; run "$D/clean"; rc_clean=$?; set -e
+          echo "bad=$rc_bad clean=$rc_clean"
+          test "$rc_bad" -eq 1
+          test "$rc_clean" -eq 0
+      - name: Write mode refuses to simulate (no model configured)
+        run: |
+          set +e
+          docker run --rm hak:runtime write --repo /tmp --goal x --scope 'src/**' --consent-execute-code
+          rc=$?
+          set -e
+          test "$rc" -eq 2

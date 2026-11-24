@@ -268,3 +268,21 @@ test('P1-3: the base is the fetched remote tip when a remote exists; local with 
   assert.equal(broken.baseSource,'local');assert.match(broken.baseNote,/Không fetch được/);
  }finally{await x.cleanup();}
 });
+
+test('P2-3 cleanup: publishing removes the local worktree; cancelling then cleaning deletes the unpublished work branch; a running change cannot be cleaned',async()=>{
+ const x=await setup({codeHandler:()=>good()});
+ try{
+  const bare=join(x.r.dir,'origin.git');await runGit(['init','-q','--bare',bare],{cwd:x.r.dir});await x.r.g('remote','add','origin',bare);
+  const a=await x.mk();await run(x,a);await x.svc.approvePublish(a.id);await x.svc.publish(a.id);
+  const wtA=(await x.r.g('worktree','list','--porcelain')).stdout;
+  assert.ok(!wtA.includes(a.id),'the worktree of a published change is removed');
+  assert.match((await x.r.g('branch','--list')).stdout,new RegExp(a.branch.replace('/','\\/')),'the branch stays locally (it exists on the remote too)');
+  const b=await x.mk();await run(x,b);
+  assert.equal((await x.r.g('branch','--list',b.branch)).stdout.trim().length>0,true);
+  await x.svc.cancel(b.id);
+  const res=await x.svc.cleanup(b.id);
+  assert.equal(res.branchDeleted,true);
+  assert.equal((await x.r.g('branch','--list',b.branch)).stdout.trim(),'','unpublished work branch removed from the user repo');
+  assert.equal((await x.r.g('worktree','list','--porcelain')).stdout.includes(b.id),false);
+ }finally{await x.cleanup();}
+});

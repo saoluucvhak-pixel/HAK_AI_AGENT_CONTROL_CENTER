@@ -9,6 +9,9 @@ const SKIP_PATH=/(^|\/)(node_modules|\.git)\/|\.min\.(js|css)$|(^|\/)(libs?|vend
 const SKIP_TESTS=/(^|\/)(tests?|__tests__|fixtures)\//i;
 const SECRET_RE='-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|AKIA[0-9A-Z]{16}|sk-ant-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|xox[bpoa]-[0-9A-Za-z-]{20,}';
 const DANGER_RE='shell\\.openPath|shell\\.openExternal|child_process|\\beval\\(|new Function\\(|nodeIntegration[ ]*:[ ]*true|contextIsolation[ ]*:[ ]*false|webSecurity[ ]*:[ ]*false|allowRunningInsecureContent';
+const CODE_EXT=/\.(js|cjs|mjs|jsx|ts|tsx|html?|vue|svelte)$/i;
+// A match that is really a regular-expression/pattern definition (contains a regex escape such as \\s \\. \\b) is the rule talking about itself, not a risk.
+const isPatternDefinition=t=>/\\[.sSbBwWdD(*+?|]/.test(t)||/\.test\(|new RegExp\(/.test(t);
 const BINARY_EXT=/\.(exe|dll|msi|scr|jar|so|dylib|apk)$/i;
 const mask=t=>t.replace(new RegExp(SECRET_RE,'g'),m=>m.slice(0,6)+'…[ẩn '+m.length+' ký tự]');
 const snip=t=>mask(String(t).trim()).replace(/\s+/g,' ').slice(0,140);
@@ -37,6 +40,10 @@ export async function runStaticChecks(ws,repoPath,sha){
   const top=lines.findIndex(l=>/^permissions:/.test(l));
   if(top<0)out.push(finding('workflow-permissions','warning',wf,1,lines[0]||'',"Workflow không khai báo 'permissions:' ở mức tệp (quyền mặc định của repo có thể rộng)"));
   else if(/^\s+contents:\s*write\b/.test(lines[top+1]||'')||/^permissions:\s*write-all/.test(lines[top]))out.push(finding('workflow-permissions','warning',wf,top+1,lines[top]+' '+(lines[top+1]||''),"Workflow cấp quyền ghi nội dung cho cả luồng ('contents: write' ở mức tệp)"));
+  lines.forEach((l,i)=>{
+   if(/^\s{2,}permissions:\s*$/.test(l)&&lines.slice(i+1,i+4).some(n=>/^\s+contents:\s*write\b/.test(n)))out.push(finding('workflow-permissions-job','warning',wf,i+1,l+' … contents: write','Job cấp quyền ghi nội dung (mã của PR/nhánh chạy trong job này có token ghi); tách job build (chỉ đọc) khỏi job phát hành (ghi)'));
+   if(/^\s{2,}permissions:\s*write-all/.test(l))out.push(finding('workflow-permissions-job','warning',wf,i+1,l,'Job cấp quyền write-all'));
+  });
   let unpinned=0,firstUn=0;
   lines.forEach((l,i)=>{
    const m=/^\s*-?\s*uses:\s*([\w.-]+\/[\w./-]+)@(\S+)/.exec(l);
@@ -46,26 +53,30 @@ export async function runStaticChecks(ws,repoPath,sha){
   if(unpinned)out.push(finding('unpinned-actions','info',wf,firstUn,lines[firstUn-1],unpinned+' action không ghim SHA đầy đủ (dùng thẻ/nhánh có thể bị thay đổi)',{count:unpinned}));
  }
  // 5. lockfile
- if(paths.includes('package.json')&&!paths.some(p=>/^(package-lock\.json|yarn\.lock|pnpm-lock\.yaml)$/.test(p)))
+ let hasDeps=false;
+ if(paths.includes('package.json')){try{const pj=JSON.parse(await ws.readAtBase(repoPath,sha,'package.json',1024*1024)||'{}');hasDeps=Object.keys({...pj.dependencies,...pj.devDependencies,...pj.optionalDependencies}).length>0;}catch{hasDeps=true;}}
+ if(hasDeps&&!paths.some(p=>/^(package-lock\.json|yarn\.lock|pnpm-lock\.yaml)$/.test(p)))
   out.push(finding('lockfile-missing','warning','package.json',1,'package.json','Có package.json nhưng không có tệp khóa phiên bản (lockfile)'));
- // 6. CSP on top-level html entry points
+ // 6. CSP on top-level html entry points (also recognise a CSP sent as an HTTP header by server code)
+ const cspHeader=(await grep('Content-Security-Policy',{max:30})).filter(h=>CODE_EXT.test(h.path)&&!/\.html?$/i.test(h.path)&&!SKIP_PATH.test(h.path)&&!SKIP_TESTS.test(h.path)).filter(h=>!isPatternDefinition(h.text)&&/setHeader|writeHead|\bheaders?\b|add_header|header\s*\(|res\.set\(/i.test(h.text)&&!/http-equiv/i.test(h.text));
  for(const h of paths.filter(p=>/(^|\/)index\.html$/i.test(p)&&!SKIP_PATH.test(p)).slice(0,5)){
   const text=await ws.readAtBase(repoPath,sha,h,4*1024*1024);if(text===null)continue;
   const m=/<meta[^>]+http-equiv=["']Content-Security-Policy["'][^>]*>/i.exec(text);
-  if(!m)out.push(finding('csp-missing','warning',h,1,text.split('\n')[0],'Trang HTML không có Content-Security-Policy (không có lớp phòng thủ nếu xảy ra XSS)'));
+  if(!m&&cspHeader.length)out.push(finding('csp-via-header','info',cspHeader[0].path,cspHeader[0].line,cspHeader[0].text,'Trang '+h+' không có meta CSP nhưng mã máy chủ gửi Content-Security-Policy bằng HTTP header (nội dung chính sách KHÔNG được xác minh ở đây)'));
+  else if(!m)out.push(finding('csp-missing','warning',h,1,text.split('\n')[0],'Trang HTML không có Content-Security-Policy (không có lớp phòng thủ nếu xảy ra XSS)'));
   else if(/script-src[^;"]*'unsafe-inline'/i.test(m[0])){const line=text.slice(0,m.index).split('\n').length;out.push(finding('csp-unsafe-inline','warning',h,line,m[0],"CSP cho phép script 'unsafe-inline' (làm yếu khả năng chặn XSS)"));}
  }
  // 7. committed executables
  for(const f of files.filter(f=>BINARY_EXT.test(f.path)&&!SKIP_PATH.test(f.path)).slice(0,20))
   out.push(finding('committed-binary','info',f.path,1,f.path+' ('+f.size+' byte)','Tệp thực thi/nhị phân nằm trong repo: khó kiểm chứng nguồn gốc so với mã nguồn',{size:f.size}));
  // 8. dangerous APIs (outside vendored libs and tests)
- const dang=(await grep(DANGER_RE,{max:400})).filter(h=>!SKIP_PATH.test(h.path)&&!SKIP_TESTS.test(h.path));
+ const dang=(await grep(DANGER_RE,{max:400})).filter(h=>CODE_EXT.test(h.path)&&!SKIP_PATH.test(h.path)&&!SKIP_TESTS.test(h.path)&&!isPatternDefinition(h.text));
  const insecure=dang.filter(h=>/nodeIntegration\s*:\s*true|contextIsolation\s*:\s*false|webSecurity\s*:\s*false|allowRunningInsecureContent/.test(h.text));
  for(const h of insecure)out.push(finding('electron-insecure-prefs','error',h.path,h.line,h.text,'Cấu hình Electron làm yếu cô lập (nodeIntegration/contextIsolation/webSecurity)'));
  for(const h of dang.filter(h=>/shell\.open(Path|External)/.test(h.text)).slice(0,15))out.push(finding('shell-open','info',h.path,h.line,h.text,"Gọi shell.open*: cần bảo đảm đối số không do dữ liệu bên ngoài/tệp không tin cậy quyết định"));
  for(const h of dang.filter(h=>/child_process|\beval\(|new Function\(/.test(h.text)).slice(0,15))out.push(finding('dynamic-exec','info',h.path,h.line,h.text,'Thực thi lệnh/mã động: cần kiểm tra nguồn dữ liệu đầu vào'));
  const inner=await grep('\\.innerHTML[ ]*[+]?=',{max:1000});
- const innerApp=inner.filter(h=>!SKIP_PATH.test(h.path)&&!SKIP_TESTS.test(h.path));
+ const innerApp=inner.filter(h=>CODE_EXT.test(h.path)&&!SKIP_PATH.test(h.path)&&!SKIP_TESTS.test(h.path)&&!isPatternDefinition(h.text));
  if(innerApp.length)out.push(finding('innerhtml-usage','info',innerApp[0].path,innerApp[0].line,innerApp[0].text,innerApp.length+' chỗ gán innerHTML: mỗi chỗ cần thoát dữ liệu không tin cậy',{count:innerApp.length}));
  // 9. vendored libraries outside npm audit
  const vend=files.filter(f=>/\.min\.js$/i.test(f.path)&&!/node_modules\//.test(f.path));

@@ -1,0 +1,93 @@
+# TEMPLATE (not verified end-to-end against a real model): AI writes and tests a change in a TARGET repository.
+# Three jobs; the human gates are GitHub Environments with required reviewers:
+#   plan    -> prints the plan + plan hash, calls NO model
+#   execute -> environment "hak-approve-plan": runs only with the approved hash; produces a verified bundle
+#   publish -> environment "hak-approve-publish": reviewer sees the exact commit; pushes ONLY that commit and opens a DRAFT PR
+# Secrets: HAK_API_KEY (or ANTHROPIC_API_KEY / GEMINI_API_KEY), and HAK_GITHUB_TOKEN for the draft PR.
+name: HAK write
+on:
+  workflow_dispatch:
+    inputs:
+      goal: {description: 'Mục tiêu', required: true}
+      scope: {description: 'Phạm vi được phép sửa (glob)', required: true, default: 'src/**'}
+env:
+  HAK_REF: REPLACE_WITH_REVIEWED_SHA
+  HAK_PROVIDER: anthropic
+  HAK_MODEL: REPLACE_WITH_MODEL_ID
+permissions:
+  contents: read
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      hash: ${{ steps.plan.outputs.hash }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {path: target, fetch-depth: 0}
+      - uses: actions/checkout@v4
+        with: {repository: saoluucvhak-pixel/HAK_AI_AGENT_CONTROL_CENTER, ref: '${{ env.HAK_REF }}', path: hak}
+      - run: docker build --target runtime -t hak:runtime hak
+      - id: plan
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOAL: ${{ inputs.goal }}
+          SCOPE: ${{ inputs.scope }}
+        run: |
+          set +e
+          docker run --rm -e HAK_PROVIDER -e HAK_MODEL -e ANTHROPIC_API_KEY -e HOME=/tmp -v "$PWD/target:/work" --user "$(id -u):$(id -g)" \
+            hak:runtime write --repo /work --goal "$GOAL" --scope "$SCOPE" --consent-execute-code > plan.json
+          rc=$?; set -e; test "$rc" -eq 10
+          echo "hash=$(node -p "require('./plan.json').planHash")" >> "$GITHUB_OUTPUT"
+          cat plan.json
+  execute:
+    needs: plan
+    runs-on: ubuntu-24.04
+    environment: hak-approve-plan          # required reviewers = approval of the plan hash
+    outputs:
+      sha: ${{ steps.run.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {path: target, fetch-depth: 0}
+      - uses: actions/checkout@v4
+        with: {repository: saoluucvhak-pixel/HAK_AI_AGENT_CONTROL_CENTER, ref: '${{ env.HAK_REF }}', path: hak}
+      - run: docker build --target runtime -t hak:runtime hak
+      - id: run
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOAL: ${{ inputs.goal }}
+          SCOPE: ${{ inputs.scope }}
+          APPROVED_HASH: ${{ needs.plan.outputs.hash }}
+        run: |
+          mkdir -p out
+          # Network is needed here (model API + dependency install); the test step is isolated by HAK_SANDBOX (netns) when the host allows,
+          # otherwise use two containers: generate with network, verify with --network none and HAK_SANDBOX=container.
+          docker run --rm -e HAK_PROVIDER -e HAK_MODEL -e ANTHROPIC_API_KEY -e HAK_SANDBOX=container -e HOME=/tmp \
+            -v "$PWD/target:/work" -v "$PWD/out:/out" --user "$(id -u):$(id -g)" \
+            hak:runtime write --repo /work --goal "$GOAL" --scope "$SCOPE" --consent-execute-code \
+            --approve "$APPROVED_HASH" --out-dir /out > out/result.out
+          echo "sha=$(node -p "require('./out/hak-change.json').headSha")" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with: {name: hak-change, path: out/}
+  publish:
+    needs: execute
+    runs-on: ubuntu-24.04
+    environment: hak-approve-publish       # required reviewers = approval of THIS commit
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with: {path: target, fetch-depth: 0}
+      - uses: actions/checkout@v4
+        with: {repository: saoluucvhak-pixel/HAK_AI_AGENT_CONTROL_CENTER, ref: '${{ env.HAK_REF }}', path: hak}
+      - uses: actions/download-artifact@v4
+        with: {name: hak-change, path: out}
+      - run: docker build --target runtime -t hak:runtime hak
+      - env:
+          HAK_GITHUB_TOKEN: ${{ secrets.HAK_GITHUB_TOKEN }}
+          APPROVED_SHA: ${{ needs.execute.outputs.sha }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          docker run --rm -e HAK_GITHUB_TOKEN -e HOME=/tmp -v "$PWD/target:/work" -v "$PWD/out:/out" --user "$(id -u):$(id -g)" \
+            hak:runtime publish --repo /work --bundle /out/hak-change.bundle \
+            --approve-publish "$APPROVED_SHA" --github-repo "$REPO" --base "$BASE"

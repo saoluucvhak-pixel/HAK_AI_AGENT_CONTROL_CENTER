@@ -1,0 +1,36 @@
+# TEMPLATE for a TARGET repository: gate pull requests with HAK Review (read-only, deterministic tier).
+# Copy to .github/workflows/hak-review.yml. Pin HAK_REF to a reviewed commit SHA of the Control Center repository.
+name: HAK review
+on:
+  pull_request:
+permissions:
+  contents: read
+env:
+  HAK_REF: REPLACE_WITH_REVIEWED_SHA
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: target
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: saoluucvhak-pixel/HAK_AI_AGENT_CONTROL_CENTER
+          ref: ${{ env.HAK_REF }}
+          path: hak
+      - name: Build image
+        run: docker build --target runtime -t hak:runtime hak
+      - name: Review (fails the job on errors)
+        run: |
+          mkdir -p out
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,exec --cap-drop ALL --security-opt no-new-privileges \
+            -e HOME=/tmp -v "$PWD/target:/work:ro" -v "$PWD/out:/out" \
+            --user "$(id -u):$(id -g)" hak:runtime review --repo /work --fail-on error --out /out/report.md --json /out/report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hak-review
+          path: out/

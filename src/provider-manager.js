@@ -44,7 +44,9 @@ class Semaphore{
 }
 export class ProviderManager{
  #file;#usageFile;#secrets;#fetch;#state={version:1,connections:[],agentModels:{}};#usage={};#gates=new Map();#loaded=false;
- constructor({dir,secrets,fetchImpl=fetch}){
+ #env;
+ constructor({dir,secrets,fetchImpl=fetch,env=process.env}){
+  this.#env=env;
   this.#file=new JsonFile(dir+'/providers.json');this.#usageFile=new JsonFile(dir+'/provider-usage.json');
   this.#secrets=secrets;this.#fetch=fetchImpl;
  }
@@ -64,7 +66,7 @@ export class ProviderManager{
  async list(){
   const out=[];
   for(const c of this.#state.connections){
-   const hasSecret=c.apiKeyEnv?Boolean(process.env[c.apiKeyEnv]):(await this.#secrets.names()).includes(this.#secretName(c.id));
+   const hasSecret=c.apiKeyEnv?Boolean(this.#env[c.apiKeyEnv]):(await this.#secrets.names()).includes(this.#secretName(c.id));
    out.push(this.#view({...c,_hasSecret:hasSecret}));
   }
   return out;
@@ -81,7 +83,7 @@ export class ProviderManager{
   conn.id=existing.id||randomBytes(8).toString('hex');conn.createdAt=existing.createdAt||conn.updatedAt;
   if(conn.apiKeyEnv!==null&&!KEY_ENV.test(conn.apiKeyEnv))throw new ProviderError('CONFIG','Tên biến môi trường phải dạng HOA_VA_GACH_DUOI và kết thúc bằng _KEY, _TOKEN hoặc _SECRET');
   if(conn.apiKeyEnv!==null&&typeof secret==='string'&&secret.length>0)throw new ProviderError('CONFIG','Chọn một: nhập API key hoặc dùng biến môi trường, không dùng cả hai');
-  const key=conn.apiKeyEnv!==null?(process.env[conn.apiKeyEnv]||null):typeof secret==='string'&&secret.length>0?secret:await this.#secrets.get(this.#secretName(conn.id));
+  const key=conn.apiKeyEnv!==null?(this.#env[conn.apiKeyEnv]||null):typeof secret==='string'&&secret.length>0?secret:await this.#secrets.get(this.#secretName(conn.id));
   const check=createAdapter(conn,{secret:key}).validateConfig();
   if(!check.ok)throw new ProviderError('CONFIG',check.errors.map(e=>conn.apiKeyEnv!==null&&/API key/.test(e)?'Biến môi trường '+conn.apiKeyEnv+' chưa được đặt hoặc quá ngắn':e).join('; '));
   if(typeof secret==='string'&&secret.length>0){if(/[\r\n]/.test(secret)||secret.length>512)throw new ProviderError('CONFIG','API key phải nằm trên một dòng và ngắn hơn 512 ký tự');await this.#secrets.set(this.#secretName(conn.id),secret);}
@@ -106,7 +108,7 @@ export class ProviderManager{
   else{this.#find(connectionId);if(model&&!/^[a-zA-Z0-9_./:@-]{1,128}$/.test(model))throw new ProviderError('CONFIG','Mã model không hợp lệ');this.#state.agentModels[agent]={connectionId,model:model||''};}
   await this.#file.write(this.#state);
  }
- async #adapter(id){const c=this.#find(id);const secret=c.apiKeyEnv?(process.env[c.apiKeyEnv]||null):await this.#secrets.get(this.#secretName(id));return {conn:c,adapter:createAdapter(c,{secret,fetchImpl:this.#fetch})};}
+ async #adapter(id){const c=this.#find(id);const secret=c.apiKeyEnv?(this.#env[c.apiKeyEnv]||null):await this.#secrets.get(this.#secretName(id));return {conn:c,adapter:createAdapter(c,{secret,fetchImpl:this.#fetch})};}
  async test(id){const {adapter}=await this.#adapter(id);return adapter.healthCheck();}
  async listModels(id){const {adapter}=await this.#adapter(id);try{return await adapter.listModels();}catch(e){throw new ProviderError(adapter.normalizeError(e).code,adapter.normalizeError(e).message);}}
  /** Pick connection + model for an agent: explicit per-agent mapping, otherwise the first enabled connection. */

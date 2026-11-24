@@ -34,6 +34,10 @@ export function runProcess(cmd,args,{cwd,env=scrubbedEnv(),timeoutMs=60000,maxBy
  });
 }
 const NULL_DEVICE='/dev/null';
+// Repositories the operator explicitly chose (registered or passed on the command line). Git's ownership check ("dubious ownership")
+// would otherwise refuse a bind-mounted repo owned by another uid; hooks/fsmonitor stay disabled regardless.
+const TRUSTED=new Set();
+export function trustRepo(path){TRUSTED.add(String(path));}
 const HOOKS_DIR=join(tmpdir(),'hak-empty-hooks');
 const NPM_NET=['HTTPS_PROXY','HTTP_PROXY','NO_PROXY','https_proxy','http_proxy','no_proxy','npm_config_https_proxy','npm_config_proxy','npm_config_noproxy','npm_config_cafile','NODE_EXTRA_CA_CERTS','SSL_CERT_FILE','SSL_CERT_DIR'];
 /** Dependency download step only: proxy / CA settings so the registry is reachable. The test step never gets these. */
@@ -66,7 +70,7 @@ export function gitNetworkEnv(base=process.env,extraConfig=[]){
  */
 export function runGit(args,{cwd,timeoutMs=60000,signal,extraEnv={},extraConfig=[],network=false,maxBytes=256*1024,secrets=[]}={}){
  mkdirSync(HOOKS_DIR,{recursive:true});
- const hardened=['-c','core.hooksPath='+HOOKS_DIR,'-c','core.fsmonitor=false','-c','commit.gpgsign=false','-c','core.autocrlf=false','-c','protocol.ext.allow=never','-c','user.name=HAK Agent','-c','user.email=hak-agent@localhost'];
+ const hardened=['-c','core.hooksPath='+HOOKS_DIR,'-c','core.fsmonitor=false','-c','commit.gpgsign=false','-c','core.autocrlf=false','-c','protocol.ext.allow=never','-c','user.name=HAK Agent','-c','user.email=hak-agent@localhost',...[...TRUSTED].flatMap(p=>['-c','safe.directory='+p])];
  const env=network?{...gitNetworkEnv(process.env,extraConfig),...extraEnv}
   :scrubbedEnv({GIT_TERMINAL_PROMPT:'0',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:NULL_DEVICE,GIT_ASKPASS:'echo',...extraEnv});
  return runProcess('git',[...hardened,...args],{cwd,env,timeoutMs,signal,maxBytes,secrets});

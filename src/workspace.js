@@ -2,7 +2,7 @@ import {mkdir,writeFile,rm,stat,readFile} from 'node:fs/promises';
 import {join,dirname,resolve} from 'node:path';
 import {existsSync,realpathSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {runGit,runProcess,scrubbedEnv,npmInstallEnv} from './safe-process.js';
+import {runGit,runProcess,scrubbedEnv,npmInstallEnv,trustRepo} from './safe-process.js';
 import {redact as redactText} from './secrets.js';
 import {validateEditPath,assertInsideRoot,matchesScope,PathError} from './code-paths.js';
 
@@ -36,6 +36,22 @@ export function verifySteps(id){
 export const verifyCommand=id=>verifySteps(id)[0];
 export const VERIFY_IDS=Object.freeze(['node-test','npm-test','npm-ci-test']);
 
+/**
+ * Where AI-written code runs. HAK_SANDBOX:
+ *  - netns (default): test steps run in a private network namespace (`unshare -rn`): no outbound network. Fail-closed if unavailable.
+ *  - container: the operator asserts the container already denies network (e.g. docker --network none); recorded in the evidence.
+ *  - off: no isolation (development only); recorded in the evidence.
+ */
+export function sandboxMode(env=process.env){
+ const m=env.HAK_SANDBOX||'netns';
+ if(!['netns','container','off'].includes(m))throw new WorkspaceError('SANDBOX','HAK_SANDBOX phải là netns, container hoặc off');
+ return m;
+}
+let probeCache=null;
+export async function netnsAvailable(){
+ if(probeCache===null){const r=await runProcess('unshare',['-rn','--','true'],{timeoutMs:10000});probeCache=r.code===0;}
+ return probeCache;
+}
 /** Isolated git worktrees: the user's checkout (HEAD, index, working tree) is never touched. */
 export class Workspace{
  #dir;#locks=new Map();
@@ -54,6 +70,7 @@ export class Workspace{
  }
  async inspectRepo(repoPath){
   const root=resolve(repoPath);
+  trustRepo(root);   // chosen explicitly by the operator
   const top=await this.#git(['rev-parse','--show-toplevel'],{cwd:root});
   if(top.code!==0)throw new WorkspaceError('NOT_REPO','Đường dẫn không phải repository git');
   // Compare real paths: on Windows one side may be an 8.3 short name (RUNNER~1) and the other the long name, with / vs \.
@@ -88,7 +105,7 @@ export class Workspace{
  async create({id,repoPath,baseSha,branch,reset=false}){
   if(!SHA.test(baseSha))throw new WorkspaceError('BAD_REF','Cần SHA đầy đủ của commit gốc');
   if(!/^hak\/[a-z0-9][a-z0-9-]{2,60}$/.test(branch))throw new WorkspaceError('BAD_BRANCH','Tên nhánh làm việc không hợp lệ');
-  const wt=this.path(id);
+  const wt=this.path(id);trustRepo(resolve(repoPath));trustRepo(wt);
   return this.#withLock(resolve(repoPath),async()=>{
    await this.remove({id,repoPath}).catch(()=>{});
    await mkdir(this.#dir,{recursive:true,mode:0o700});
@@ -129,7 +146,7 @@ export class Workspace{
  /** Detached worktree (no branch is created) for read-only execution checks. */
  async createDetached({id,repoPath,baseSha}){
   if(!SHA.test(baseSha))throw new WorkspaceError('BAD_REF','Cần SHA đầy đủ của commit gốc');
-  const wt=this.path(id);
+  const wt=this.path(id);trustRepo(resolve(repoPath));trustRepo(wt);
   return this.#withLock(resolve(repoPath),async()=>{
    await this.remove({id,repoPath}).catch(()=>{});
    await mkdir(this.#dir,{recursive:true,mode:0o700});
@@ -147,6 +164,12 @@ export class Workspace{
   const aud=await runProcess(process.execPath,[cli,'audit','--omit=dev','--json'],{cwd:worktree,timeoutMs,signal,env:npmInstallEnv(),maxBytes:512*1024});
   let counts=null;try{const j=JSON.parse(aud.stdout);counts=j.metadata?.vulnerabilities||null;}catch{/* not JSON */}
   return {ok:counts!==null,stage:'audit',exitCode:aud.code,counts,output:counts?'':(aud.stdout+aud.stderr).slice(-2000),outputSha256:sha256(aud.stdout),durationMs:Date.now()-started};
+ }
+ /** Delete a LOCAL work branch created by the app. Refuses anything that is not hak/*; never touches remotes. */
+ async deleteBranch(repoPath,branch){
+  if(!/^hak\/[a-z0-9][a-z0-9-]{2,60}$/.test(branch))throw new WorkspaceError('BAD_BRANCH','Chỉ được xóa nhánh hak/*');
+  const r=await this.#git(['branch','-D','--',branch],{cwd:repoPath});
+  return r.code===0;
  }
  async listFiles(repoPath,sha,scope){
   const r=await this.#git(['ls-tree','-r','--name-only','-z',sha],{cwd:repoPath,maxBytes:2*1024*1024});
@@ -231,16 +254,20 @@ export class Workspace{
  }
  async verify(worktree,commandId,{timeoutMs=300000,signal}={}){
   const steps=verifySteps(commandId);
+  const mode=sandboxMode();
+  const wrap=mode==='netns';
+  if(wrap&&!(await netnsAvailable()))throw new WorkspaceError('SANDBOX_UNAVAILABLE','Không thể cô lập mạng (unshare -rn) để chạy mã do AI viết. Chạy trong container đã chặn mạng rồi đặt HAK_SANDBOX=container, hoặc HAK_SANDBOX=off khi phát triển.');
   const started=Date.now();let text='',code=0,timedOut=false,aborted=false;
   for(const st of steps){
    const left=Math.max(1000,timeoutMs-(Date.now()-started));
-   const r=await runProcess(st.cmd,st.args,{cwd:worktree,timeoutMs:left,signal,maxBytes:64*1024,env:st.install?npmInstallEnv():scrubbedEnv({CI:'1'})});
+   const iso=wrap&&!st.install;
+   const r=await runProcess(iso?'unshare':st.cmd,iso?['-rn','--',st.cmd,...st.args]:st.args,{cwd:worktree,timeoutMs:left,signal,maxBytes:64*1024,env:st.install?npmInstallEnv():scrubbedEnv({CI:'1'})});
    text+=(st.install?'[cài phụ thuộc]\n':'')+(r.stdout+(r.stderr?'\n'+r.stderr:''))+'\n';
    code=r.code;timedOut=r.timedOut;aborted=r.aborted;
    if(r.code!==0||r.timedOut||r.aborted)break;
   }
   const out=text.slice(-8000);
-  return {passed:code===0&&!timedOut&&!aborted,exitCode:code,timedOut,aborted,durationMs:Date.now()-started,output:out,outputSha256:sha256(out)};
+  return {passed:code===0&&!timedOut&&!aborted,exitCode:code,timedOut,aborted,sandbox:mode,durationMs:Date.now()-started,output:out,outputSha256:sha256(out)};
  }
  async push(worktree,{remote='origin',branch,token=null}){
   if(!/^hak\/[a-z0-9][a-z0-9-]{2,60}$/.test(branch))throw new WorkspaceError('BAD_BRANCH','Chỉ được đẩy nhánh hak/*');

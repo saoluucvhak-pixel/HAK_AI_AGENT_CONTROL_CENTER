@@ -4,6 +4,7 @@ import {join,resolve,sep} from 'node:path';
 import {JsonFile} from './json-store.js';
 import {VERIFY_IDS,verifyCommand} from './workspace.js';
 import {redact} from './secrets.js';
+import {createDraftPr} from './github-pr.js';
 
 const SLUG=/^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
 const LIVE=new Set(['RUNNING','TESTING']);
@@ -209,16 +210,24 @@ export class CodeChangeService{
   if(cc.githubRepo&&token){
    try{
     const order=this.#orch.get(cc.orderId);
-    const r=await this.#fetch('https://api.github.com/repos/'+cc.githubRepo+'/pulls',{method:'POST',redirect:'error',signal:AbortSignal.timeout(15000),headers:{Accept:'application/vnd.github+json','Content-Type':'application/json','User-Agent':'HAK-Control-Center',Authorization:'Bearer '+token},
-     body:JSON.stringify({title:('hak: '+order.title).slice(0,120),head:cc.branch,base:cc.defaultBranch,draft:true,body:'Thay đổi do AI đề xuất, đã qua kiểm thử cục bộ ('+cc.verifyCommand+') ở commit '+cc.headSha+'.\nWork Order: '+cc.orderId+' · báo cáo SHA-256 '+cc.aggregateSha256+'\n\nPR nháp: cần con người rà soát và CI đạt. Không tự động merge. Danh tính model không được xác minh độc lập.'})});
-    if(!r.ok)throw new Error('GitHub HTTP '+r.status);
-    const j=await r.json();
-    if(Number.isSafeInteger(j.number)&&typeof j.html_url==='string')pr={number:j.number,url:j.html_url,draft:true};
+    pr=await createDraftPr({fetchImpl:this.#fetch,slug:cc.githubRepo,token,head:cc.branch,base:cc.defaultBranch,title:'hak: '+order.title,
+     body:'Thay đổi do AI đề xuất, đã qua kiểm thử cục bộ ('+cc.verifyCommand+') ở commit '+cc.headSha+'.\nWork Order: '+cc.orderId+' · báo cáo SHA-256 '+cc.aggregateSha256+'\n\nPR nháp: cần con người rà soát và CI đạt. Không tự động merge. Danh tính model không được xác minh độc lập.'});
    }catch(e){cc.error={code:'PR_FAILED',message:'Đã đẩy nhánh '+cc.branch+' nhưng tạo PR nháp thất bại: '+redact(e.message,[token]).slice(0,200),retryable:true};}
   }
   cc.pr=pr;cc.publishedAt=new Date(this.#now()).toISOString();
   this.#log(cc,'PUBLISHED',actor,pr?'Đã đẩy nhánh và tạo PR nháp #'+pr.number:'Đã đẩy nhánh '+cc.branch+(cc.githubRepo?' (chưa có PR: thiếu token hoặc lỗi)':' (repository cục bộ, không có GitHub)'));
-  await this.#save(cc);return structuredClone(cc);
+  await this.#save(cc);
+  await this.#ws.remove({id,repoPath:cc.repoPath}).catch(()=>{});   // the branch is on the remote now; the local worktree is disposable
+  return structuredClone(cc);
  }
- async cleanup(id){const cc=this.#get(id);await this.#ws.remove({id,repoPath:cc.repoPath});}
+ /** Remove the worktree; also delete the LOCAL work branch when it was never published. Refuses while running. */
+ async cleanup(id){
+  const cc=this.#get(id);
+  if(this.#runs.has(id)||['RUNNING','TESTING'].includes(cc.status))throw new CodeChangeError('BAD_STATE','Đang chạy; hủy trước khi dọn');
+  await this.#ws.remove({id,repoPath:cc.repoPath});
+  let branchDeleted=false;
+  if(cc.status!=='PUBLISHED'&&cc.status!=='VERIFIED')branchDeleted=await this.#ws.deleteBranch(cc.repoPath,cc.branch);
+  cc.cleanedAt=new Date(this.#now()).toISOString();await this.#save(cc);
+  return {worktreeRemoved:true,branchDeleted};
+ }
 }

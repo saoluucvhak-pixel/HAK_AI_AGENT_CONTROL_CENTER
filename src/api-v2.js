@@ -73,6 +73,7 @@ export function createApiV2({getPort,token,providers,orchestrator,codeChanges=nu
      if(c&&act==='start'&&req.method==='POST'){step='start';send(await codeChanges.start(c,'local-operator',{rerunInterrupted:body.rerunInterrupted===true}),202);return true;}
      if(c&&act==='cancel'&&req.method==='POST'){step='cancel';send(await codeChanges.cancel(c));return true;}
      if(c&&act==='approve-publish'&&req.method==='POST'){step='approve-publish';send(await codeChanges.approvePublish(c,{reason:body.reason}));return true;}
+     if(c&&act==='cleanup'&&req.method==='POST'){step='cleanup';send(await codeChanges.cleanup(c));return true;}
      if(c&&act==='publish'&&req.method==='POST'){step='publish';send(await codeChanges.publish(c));return true;}
     }
    }

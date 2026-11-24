@@ -1,5 +1,6 @@
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
+process.env.HAK_SANDBOX=process.env.HAK_SANDBOX||'off'; // unit tests run test steps directly; sandbox tests opt in explicitly
 import {join} from 'node:path';
 import {FileSecretBackend} from '../src/secrets.js';
 import {ProviderManager} from '../src/provider-manager.js';

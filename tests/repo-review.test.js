@@ -13,7 +13,7 @@ const GOLDEN={
  'app/index.html':'<!DOCTYPE html>\n<html><head><meta charset="utf-8"></head><body></body></html>\n',
  'app/libs/lib.min.js':'/*! lib v1.0.0 */var a=1;\n',
  'app/native/Helper.exe':'MZ-not-really-an-exe',
- 'package.json':'{"name":"x","scripts":{"test":"node --test"}}\n',
+ 'package.json':'{"name":"x","scripts":{"test":"node --test"},"dependencies":{"left-pad":"1.3.0"}}\n',
  '.github/workflows/build.yml':'name: build\non: push\npermissions:\n  contents: write\njobs:\n  b:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm install\n      - uses: actions/upload-artifact@'+'a'.repeat(40)+'\n',
  'src/main.js':"const {shell}=require('electron');\nfunction open(f){ return shell.openPath(f); }\nnew BrowserWindow({webPreferences:{nodeIntegration: true}});\nel.innerHTML = x;\n",
  'src/cfg.js':'const token = "'+FAKE_TOKEN+'";\n',
@@ -217,5 +217,35 @@ test('review records where the commit came from (remote fetch or local branch)',
   assert.equal(rep.source,'local');assert.match(rep.notes[0],/CỤC BỘ/);
   assert.match(svc.report(a.id),/Nguồn commit: nhánh CỤC BỘ/);
   await t.cleanup();
+ }finally{await r.cleanup();}
+});
+
+test('P2-2 no false positives: rule definitions, docs, no-dependency package.json, CSP sent as a header',async()=>{
+ const selfLines="const DANGER_RE='shell\\\\.openPath|nodeIntegration[ ]*:[ ]*true|contextIsolation[ ]*:[ ]*false';\nconst insecure=dang.filter(h=>/nodeIntegration\\s*:\\s*true|webSecurity\\s*:\\s*false/.test(h.text));\n";
+ const r=await makeRepo({
+  'src/rules.js':selfLines,
+  'docs/notes.md':'Use shell.openPath(f) carefully; nodeIntegration: true is bad.\n',
+  'package.json':'{"name":"nodeps","scripts":{"test":"node --test"}}\n',
+  'server.js':"res.setHeader('Content-Security-Policy', \"default-src 'self'\");\n",
+  'src/lint.js':"const m=/<meta[^>]+http-equiv=[\"']Content-Security-Policy[\"'][^>]*>/i.exec(text);\n",
+  'web/index.html':'<html><head><meta charset="utf-8"></head></html>\n',
+  'real.js':"new BrowserWindow({webPreferences:{ nodeIntegration: true }});\n"},{pkgTest:false});
+ try{
+  const ws=new Workspace({dir:join(r.dir,'ws')});
+  const f=(await runStaticChecks(ws,r.repo,r.sha)).findings;
+  const rules=f.map(x=>x.rule+':'+x.path);
+  assert.deepEqual(f.filter(x=>x.rule==='electron-insecure-prefs').map(x=>x.path),['real.js'],'only the real insecure setting is an error; the rule definitions are not');
+  assert.ok(!rules.some(x=>x.startsWith('shell-open')),'markdown and pattern definitions are not shell.open findings');
+  assert.ok(!rules.includes('lockfile-missing:package.json'),'no dependencies, no lockfile needed');
+  assert.ok(!f.some(x=>x.rule==='csp-missing'),'a CSP header in server code is recognised');
+  const via=f.find(x=>x.rule==='csp-via-header');assert.ok(via);assert.equal(via.path,'server.js','a rule that merely mentions the string is not a header');assert.equal(via.severity,'info');assert.match(via.title,/KHÔNG được xác minh/);
+ }finally{await r.cleanup();}
+});
+test('P2-2 detection gaps closed: job-level contents: write (and write-all) in workflows',async()=>{
+ const r=await makeRepo({'.github/workflows/rel.yml':'name: rel\non: pull_request\npermissions:\n  contents: read\njobs:\n  build:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: write\n    steps:\n      - run: npm ci\n  other:\n    runs-on: ubuntu-latest\n    permissions: write-all\n    steps:\n      - run: npm ci\n'},{pkgTest:false});
+ try{
+  const ws=new Workspace({dir:join(r.dir,'ws')});
+  const f=(await runStaticChecks(ws,r.repo,r.sha)).findings.filter(x=>x.rule==='workflow-permissions-job');
+  assert.deepEqual(f.map(x=>x.line).sort((a,b)=>a-b),[8,14]);
  }finally{await r.cleanup();}
 });

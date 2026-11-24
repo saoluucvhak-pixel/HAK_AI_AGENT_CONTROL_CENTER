@@ -175,3 +175,51 @@ test('replace keeps CRLF files consistent when the model sends LF anchors; full 
   assert.equal(created[0].mode,'content');
  }finally{await r.cleanup();}
 });
+
+import {sandboxMode,netnsAvailable} from '../src/workspace.js';
+test('sandbox policy: default is fail-closed netns; invalid values are refused; the mode is recorded in the evidence',async()=>{
+ const keep=process.env.HAK_SANDBOX;
+ try{
+  delete process.env.HAK_SANDBOX;assert.equal(sandboxMode(),'netns');
+  process.env.HAK_SANDBOX='nonsense';assert.throws(()=>sandboxMode(),/netns, container hoặc off/);
+  process.env.HAK_SANDBOX='off';
+  const r=await makeRepo();
+  try{
+   const ws=new Workspace({dir:join(r.dir,'ws')});
+   const wt=await ws.create({id:'s0',repoPath:r.repo,baseSha:r.sha,branch:'hak/test-s0'});
+   const v=await ws.verify(wt,'node-test',{timeoutMs:60000});
+   assert.equal(v.sandbox,'off');assert.equal(v.passed,true);
+  }finally{await r.cleanup();}
+ }finally{process.env.HAK_SANDBOX=keep;}
+});
+test('sandbox netns: AI-written test code has no network; fails closed when isolation is unavailable',async()=>{
+ const keep=process.env.HAK_SANDBOX;
+ try{
+  process.env.HAK_SANDBOX='netns';
+  const probe="import test from 'node:test';import assert from 'node:assert/strict';import net from 'node:net';test('no network',async()=>{const r=await new Promise(res=>{const s=net.connect({host:'1.1.1.1',port:443,timeout:2000});s.on('connect',()=>{s.destroy();res('connected');});s.on('error',e=>res('blocked:'+e.code));s.on('timeout',()=>{s.destroy();res('blocked:timeout');});});assert.match(r,/^blocked/);});\n";
+  const r=await makeRepo({'test/net.test.js':probe},{pkgTest:false});
+  try{
+   const ws=new Workspace({dir:join(r.dir,'ws')});
+   const wt=await ws.create({id:'s1',repoPath:r.repo,baseSha:r.sha,branch:'hak/test-s1'});
+   if(!(await netnsAvailable())){
+    await assert.rejects(()=>ws.verify(wt,'node-test'),e=>e.code==='SANDBOX_UNAVAILABLE');
+    return;
+   }
+   const v=await ws.verify(wt,'node-test',{timeoutMs:60000});
+   assert.equal(v.sandbox,'netns');assert.equal(v.passed,true,v.output);
+  }finally{await r.cleanup();}
+ }finally{process.env.HAK_SANDBOX=keep;}
+});
+
+import {trustRepo} from '../src/safe-process.js';
+test('trustRepo: a repository path chosen by the operator is passed as safe.directory (works for bind-mounted repos owned by another uid)',async()=>{
+ const r=await makeRepo();
+ try{
+  trustRepo(r.repo);
+  const out=await runProcess('git',['--version'],{timeoutMs:10000});assert.equal(out.code,0);
+  const {runGit}=await import('../src/safe-process.js');
+  const cfg=await runGit(['config','--get-all','safe.directory'],{cwd:r.repo});
+  assert.ok(cfg.stdout.split('\n').includes(r.repo),'the operator-chosen path is in the effective safe.directory list');
+  assert.ok(!cfg.stdout.split('\n').includes('*'),'never a wildcard');
+ }finally{await r.cleanup();}
+});
