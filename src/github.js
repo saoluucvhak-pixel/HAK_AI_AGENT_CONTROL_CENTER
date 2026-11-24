@@ -1,4 +1,4 @@
-export const REPOSITORIES=Object.freeze(['HAK_AI_AGENT_CONTROL_CENTER','HAK_AI_SKILLS','HAK_CODE_QUALITY_TEST','HAK_OCR_ENGINE','HAK_SMART_FILTER','HAK_ACCOUNTING_REPORT_STANDARD']);
+export const REPOSITORIES=Object.freeze(['HAK_AI_AGENT_CONTROL_CENTER','HAK_AI_SKILLS','HAK_KHO_OFFLINE','HAK_CODE_QUALITY_TEST','HAK_OCR_ENGINE','HAK_SMART_FILTER','HAK_ACCOUNTING_REPORT_STANDARD']);
 const OWNER='saoluucvhak-pixel';
 export function safeRepo(name){if(!REPOSITORIES.includes(name))throw new Error('Repository not allowlisted');return name;}
 export async function githubSnapshot(name,{fetchImpl=fetch,token=process.env.GITHUB_TOKEN}={}){
