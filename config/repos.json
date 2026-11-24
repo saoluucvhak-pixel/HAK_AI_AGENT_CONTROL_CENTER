@@ -11,6 +11,7 @@
   ],
   "skillRepositories": [
     "saoluucvhak-pixel/HAK_AI_SKILLS",
+    "openai/codex-security",
     "vercel-labs/skills"
   ]
 }

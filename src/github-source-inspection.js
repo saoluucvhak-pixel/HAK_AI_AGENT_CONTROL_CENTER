@@ -1,7 +1,7 @@
 import {parseRepoRef} from './github.js';
 const MAX_FILES=10;
 const MAX_BYTES=30000;
-const VALID_PATH=/^(?:(?:src|lib|app|web|config|docs|tests|test|scripts)\/(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\.(?:js|mjs|cjs|ts|tsx|jsx|py|html|css|json|yml|yaml|md)|skills\/[A-Za-z0-9_.-]+\/SKILL\.md|package\.json|README\.md)$/;
+const VALID_PATH=/^(?:(?:src|lib|app|web|config|docs|tests|test|scripts)\/(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\.(?:js|mjs|cjs|ts|tsx|jsx|py|html|css|json|yml|yaml|md)|(?:plugins\/[A-Za-z0-9_.-]+\/)?skills\/[A-Za-z0-9_.-]+\/SKILL\.md|package\.json|README\.md)$/;
 export function safeSourcePath(path){
  if(typeof path!=='string'||path.length>240||!(VALID_PATH.test(path)||path==='tests/fixtures/patch-acceptance.txt')||path.split('/').includes('..')||path.split('/').includes('.'))throw new Error('Invalid source path');
  if(path.endsWith('.txt')&&path!=='tests/fixtures/patch-acceptance.txt')throw new Error('Invalid source path');

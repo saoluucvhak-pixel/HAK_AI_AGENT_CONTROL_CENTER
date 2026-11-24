@@ -9,14 +9,43 @@ const SKILL_NAME=/^[a-z0-9][a-z0-9-]{0,79}$/;
 const ROLE_SKILL_HINTS={
  architecture:['hak-archify-architecture','archify','hak-code-auditor'],
  ui:['hak-ui-designer','hak-ui-ux-pro-max','hak-vercel-web-design','hak-unslop-design'],
- backend:['hak-code-auditor','hak-data-integrity','hak-migration-manager'],
+ backend:['fix-finding','security-diff-scan','hak-code-auditor','hak-data-integrity','hak-migration-manager'],
  data:['hak-parent-child-data-model','hak-data-integrity','hak-smart-filter'],
- security:['hak-electron-security','hak-code-auditor'],
- testing:['hak-code-auditor','hak-payroll-validator'],
- quality:['hak-code-auditor','hak-unslop-design'],
+ security:['security-scan','triage-finding','check-skills','hak-electron-security','hak-code-auditor'],
+ testing:['triage-finding','verify-fix','hak-code-auditor','hak-payroll-validator'],
+ quality:['verify-fix','security-diff-scan','hak-code-auditor','hak-unslop-design'],
  release:['hak-release-builder'],
  ocr:['hak-document-markdown','hak-accounting-report']
 };
+
+const SKILL_REPO_BASE_PATHS={
+ 'openai/codex-security':'plugins/codex-security/skills'
+};
+
+export function resolveSkillBasePath(repoFullName,overrideBasePath){
+ if(typeof overrideBasePath==='string'&&/^[A-Za-z0-9_./-]{1,120}$/.test(overrideBasePath)&&!overrideBasePath.includes('..')){
+  return overrideBasePath.replace(/^\/+|\/+$/g,'');
+ }
+ return SKILL_REPO_BASE_PATHS[repoFullName]||'skills';
+}
+
+export function auditSkillSafety(skill){
+ const text=String((skill?.name||'')+'\n'+(skill?.description||'')+'\n'+(skill?.body||''));
+ const blockRules=[
+  {id:'remote-shell-pipe',pattern:/(?:curl|wget)\s+[^\n|]+\|\s*(?:sh|bash|zsh)\b/i},
+  {id:'destructive-root-rm',pattern:/\brm\s+-rf\s+\/(?:\s|$)/i},
+  {id:'encoded-powershell',pattern:/powershell(?:\.exe)?\s+[^\n]*-enc(?:odedcommand)?\b/i},
+  {id:'prompt-override',pattern:/ignore\s+(?:all\s+)?previous\s+instructions|bypass\s+(?:human\s+)?approval/i}
+ ];
+ const reviewRules=[
+  {id:'shell-execution-hint',pattern:/\b(?:eval|execSync|child_process)\b/i}
+ ];
+ const blockFindings=blockRules.filter(r=>r.pattern.test(text)).map(r=>r.id);
+ if(blockFindings.length>0)return {verdict:'BLOCK',findings:blockFindings};
+ const reviewFindings=reviewRules.filter(r=>r.pattern.test(text)).map(r=>r.id);
+ if(reviewFindings.length>0)return {verdict:'REVIEW',findings:reviewFindings};
+ return {verdict:'PASS',findings:[]};
+}
 
 export function parseSkillMarkdown(rawContent,{source='local',nameHint=''}={}){
  if(typeof rawContent!=='string'||!rawContent.trim())throw new Error('Empty SKILL.md');
@@ -64,26 +93,28 @@ export async function loadLocalSkills(dir='./skills'){
  }
 }
 
-export async function fetchGithubSkillsIndex(repoRef,{fetchImpl=fetch,token=process.env.GITHUB_TOKEN,env=process.env,extraRepos=[]}={}){
+export async function fetchGithubSkillsIndex(repoRef,{fetchImpl=fetch,token=process.env.GITHUB_TOKEN,env=process.env,extraRepos=[],basePath}={}){
  const ref=parseRepoRef(repoRef,{env,extraRepos});
+ const skillDir=resolveSkillBasePath(ref.fullName,basePath);
  const headers={Accept:'application/vnd.github+json','User-Agent':'HAK-Operations-Dashboard'};
  if(token)headers.Authorization='Bearer '+token;
- const response=await fetchImpl('https://api.github.com/repos/'+ref.fullName+'/contents/skills',{headers,redirect:'error',signal:AbortSignal.timeout(10000)});
+ const response=await fetchImpl('https://api.github.com/repos/'+ref.fullName+'/contents/'+skillDir,{headers,redirect:'error',signal:AbortSignal.timeout(10000)});
  if(response.status===404)return [];
  if(!response.ok)throw new Error('GitHub HTTP '+response.status);
  const items=await response.json();
  if(!Array.isArray(items))throw new Error('Invalid skills directory response');
  return items
   .filter(item=>item?.type==='dir'&&SKILL_NAME.test(item.name||''))
-  .map(item=>({name:item.name,repo:ref.fullName,path:item.path,url:item.html_url||null}));
+  .map(item=>({name:item.name,repo:ref.fullName,basePath:skillDir,path:item.path,url:item.html_url||null}));
 }
 
-export async function fetchGithubSkill(repoRef,skillName,{fetchImpl=fetch,token=process.env.GITHUB_TOKEN,env=process.env,extraRepos=[]}={}){
+export async function fetchGithubSkill(repoRef,skillName,{fetchImpl=fetch,token=process.env.GITHUB_TOKEN,env=process.env,extraRepos=[],basePath}={}){
  if(!SKILL_NAME.test(skillName))throw new Error('Invalid skill name');
  const ref=parseRepoRef(repoRef,{env,extraRepos});
+ const skillDir=resolveSkillBasePath(ref.fullName,basePath);
  const headers={Accept:'application/vnd.github+json','User-Agent':'HAK-Operations-Dashboard'};
  if(token)headers.Authorization='Bearer '+token;
- const response=await fetchImpl('https://api.github.com/repos/'+ref.fullName+'/contents/skills/'+skillName+'/SKILL.md',{headers,redirect:'error',signal:AbortSignal.timeout(10000)});
+ const response=await fetchImpl('https://api.github.com/repos/'+ref.fullName+'/contents/'+skillDir+'/'+skillName+'/SKILL.md',{headers,redirect:'error',signal:AbortSignal.timeout(10000)});
  if(!response.ok)throw new Error('GitHub HTTP '+response.status);
  const data=await response.json();
  if(data.type!=='file'||data.encoding!=='base64'||typeof data.content!=='string'||!Number.isSafeInteger(data.size)||data.size>MAX_SKILL_BYTES){
@@ -122,7 +153,7 @@ export async function discoverAllSkills({localDir='./skills',fetchImpl=fetch,tok
  const remoteLists=await Promise.all(repos.map(async ref=>{
   try{
    const items=await fetchGithubSkillsIndex(ref.fullName,{fetchImpl,token});
-   return items.map(item=>({name:item.name,description:'Remote skill from '+ref.fullName,body:'',source:'github:'+ref.fullName,sha256:null,bytes:0}));
+   return items.map(item=>({name:item.name,description:'Remote skill from '+ref.fullName,body:'',source:'github:'+ref.fullName,basePath:item.basePath,sha256:null,bytes:0}));
   }catch{
    return [];
   }
