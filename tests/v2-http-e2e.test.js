@@ -93,6 +93,11 @@ test('security + multi-agent HTTP flow on a real server, with restart persistenc
   const overview=await (await v2('/overview')).json();
   assert.equal(overview.orchestration.completed,1);assert.equal(overview.usage.inputTokens,50);
 
+  // --- backup through the API
+  const bk=await v2('/backups','POST',{});assert.equal(bk.status,201);
+  const bkBody=await bk.json();assert.ok(bkBody.fileCount>=3);
+  assert.equal((await (await v2('/backups')).json()).backups.length,1);
+
   // --- observer sees agent progress
   const status=await (await fetch(base+'/api/agent-status')).json();
   assert.ok(status.tasks.some(t=>t.taskId.startsWith(wo.id+':')&&t.status==='passed'));

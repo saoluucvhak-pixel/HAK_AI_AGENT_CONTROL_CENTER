@@ -49,7 +49,7 @@ await approvals.load();
 const legacyApprovals=new ApprovalStore({defaultTtlMs:5*60*1000});
 const orchestrator=new Orchestrator({dir:stateDir,providers,approvals,onEvent:event=>observerStore.add(event)});
 await orchestrator.load();
-const apiV2=createApiV2({getPort:()=>livePort(),token:operatorToken,providers,orchestrator,onShutdown:()=>{server.close();setTimeout(()=>process.exit(0),1500).unref();}});
+const apiV2=createApiV2({getPort:()=>livePort(),token:operatorToken,providers,orchestrator,dataDir:stateDir,onShutdown:()=>{server.close();setTimeout(()=>process.exit(0),1500).unref();}});
 const jobs=new Map();
 let activeJob=false;
 const jobDir=resolve(process.env.HAK_AGENT_OUTPUT_DIR||dataPath(process.env,'agent-results'));

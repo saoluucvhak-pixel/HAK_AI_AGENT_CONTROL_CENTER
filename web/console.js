@@ -146,3 +146,8 @@ $('shutdown').addEventListener('click',async()=>{
  try{await api('/shutdown','POST',{});document.body.textContent='HAK đã dừng. Mở lại bằng shortcut HAK AI Agent Control Center.';}
  catch(e){alert('Không dừng được: '+explain(e));}
 });
+
+$('backup').addEventListener('click',async()=>{
+ try{const r=await api('/backups','POST',{});alert('Đã sao lưu '+r.fileCount+' tệp: '+r.name+'\n'+r.note);}
+ catch(e){alert('Không sao lưu được: '+explain(e));}
+});

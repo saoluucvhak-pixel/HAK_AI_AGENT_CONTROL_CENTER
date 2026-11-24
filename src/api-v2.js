@@ -2,6 +2,7 @@ import {sendJson,readJsonBody,tokenMatches,originAllowed,createRateLimiter} from
 import {PROVIDER_TYPES} from './providers.js';
 import {AGENT_ROLES} from './provider-manager.js';
 import {AGENT_LABELS} from './planner.js';
+import {createBackup,listBackups} from './data-backup.js';
 
 const HINTS={
  AUTH:'Kiểm tra lại API key trong AI Provider Manager rồi thử lại.',CONFIG:'Mở AI Provider Manager, thêm hoặc bật một kết nối AI hợp lệ.',
@@ -18,7 +19,7 @@ export function describeError(error,step){
 }
 function statusFor(code){return {NOT_FOUND:404,NOT_APPROVED:409,BAD_STATE:409,BAD_TRANSITION:409,ALREADY_RUNNING:409,CONFIRM_RERUN:409,TOO_LARGE:413,BAD_JSON:400,CONFIG:400,INVALID:400,AUTH:502,NETWORK:502,TIMEOUT:504,RATE_LIMIT:429,UPSTREAM:502}[code]||500;}
 
-export function createApiV2({getPort,token,providers,orchestrator,onShutdown=null}){
+export function createApiV2({getPort,token,providers,orchestrator,dataDir=null,onShutdown=null}){
  const allow=createRateLimiter();
  return async function handle(req,res,path){
   if(!path.startsWith('/api/v2/'))return false;
@@ -58,6 +59,10 @@ export function createApiV2({getPort,token,providers,orchestrator,onShutdown=nul
     if(b&&c==='cancel'&&req.method==='POST'){step='cancel';send(await orchestrator.cancel(b,'local-operator',String(body.reason||'Người dùng hủy').slice(0,200)));return true;}
     if(b&&c==='output'&&d&&req.method==='GET'){step='read-output';send({content:await orchestrator.getOutput(b,d),notice:'Đề xuất do AI tạo; cần con người rà soát'});return true;}
     if(b&&c==='aggregate'&&req.method==='GET'){step='read-aggregate';send({content:await orchestrator.getAggregate(b),notice:'Đề xuất do AI tạo; cần con người rà soát'});return true;}
+   }
+   if(a==='backups'&&dataDir){
+    if(req.method==='GET'){send({backups:await listBackups(dataDir)});return true;}
+    if(req.method==='POST'){step='backup';const r=await createBackup(dataDir);send({fileCount:r.fileCount,name:r.path.split(/[\\/]/).pop(),note:'Bản sao nằm trong thư mục backups của dữ liệu người dùng. Khóa API vẫn được mã hóa DPAPI và chỉ phục hồi được bởi cùng tài khoản Windows.'},201);return true;}
    }
    if(a==='shutdown'&&req.method==='POST'&&onShutdown){send({ok:true});setTimeout(onShutdown,50);return true;}
    send({error:'Không có chức năng này',code:'NOT_FOUND',action:'Cập nhật ứng dụng hoặc kiểm tra đường dẫn.'},404);return true;
