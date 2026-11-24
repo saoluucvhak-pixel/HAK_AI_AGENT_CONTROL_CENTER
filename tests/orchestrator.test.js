@@ -132,7 +132,7 @@ test('resume after failure re-runs only unfinished tasks (no duplicate execution
  }finally{await s.cleanup();}
 });
 test('timeout: a hung model call is aborted and reported as retryable TIMEOUT',async()=>{
- const s=await buildStack({connection:{retries:0},handler:(body,i,init)=>new Promise((res,rej)=>{const keep=setTimeout(()=>res('late'),8000);init.signal.addEventListener('abort',()=>{clearTimeout(keep);rej(new DOMException('x','AbortError'));});})});
+ const s=await buildStack({connection:{retries:0},handler:(body,i,init)=>new Promise((res,rej)=>{(globalThis.__held??=[]).push(init.signal);const keep=setTimeout(()=>res('late'),8000);init.signal.addEventListener('abort',()=>{clearTimeout(keep);rej(new DOMException('x','AbortError'));});})});
  try{
   const o=await s.orchestrator.create(input({agents:['backend'],taskTimeoutMs:1000}));
   const done=await runToEnd(s,o.id);
@@ -142,13 +142,15 @@ test('timeout: a hung model call is aborted and reported as retryable TIMEOUT',a
 });
 test('cancel stops running work, marks tasks CANCELLED and revokes approval',async()=>{
  // The timer keeps the event loop alive like a real socket would (composite AbortSignals alone do not).
- const s=await buildStack({handler:(body,i,init)=>new Promise((res,rej)=>{const keep=setTimeout(()=>res('late'),8000);init.signal.addEventListener('abort',()=>{clearTimeout(keep);rej(new DOMException('x','AbortError'));});})});
+ const held=[]; // strong refs: a real fetch keeps its signal alive; a bare stub would let the composite AbortSignal be garbage-collected
+ const s=await buildStack({handler:(body,i,init)=>new Promise((res,rej)=>{held.push(init.signal);const keep=setTimeout(()=>res('late'),8000);init.signal.addEventListener('abort',()=>{clearTimeout(keep);rej(new DOMException('x','AbortError'));});})});
  try{
   const o=await s.orchestrator.create(input({agents:['architecture','backend']}));
   await s.orchestrator.approve(o.id);await s.orchestrator.start(o.id);
   await new Promise(r=>setTimeout(r,50));
   const done=await s.orchestrator.cancel(o.id,'local-operator','Dừng thử');
   assert.equal(done.status,'CANCELLED');
+  assert.ok(held.length>=1);
   assert.ok(done.tasks.every(t=>t.status==='CANCELLED'));
   assert.equal(done.transitions.at(-1).reason,'Dừng thử');
   await assert.rejects(()=>s.orchestrator.start(o.id),e=>['BAD_STATE','NOT_APPROVED','BAD_TRANSITION'].includes(e.code));
