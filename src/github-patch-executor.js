@@ -1,16 +1,17 @@
 import {validateGithubPatchProposal} from './github-patch-proposal.js';
 import {githubPatchPreflight} from './github-patch-preflight.js';
-const OWNER='saoluucvhak-pixel';
+import {parseRepoRef} from './github.js';
 const SHA=/^[a-f0-9]{40}$/;
 function safeBranch(name){if(typeof name!=='string'||!/^hak-fix\/[a-z0-9][a-z0-9-]{2,50}$/.test(name))throw new Error('Invalid dedicated fix branch');return name;}
-export async function executeGithubPatchProposal(proposal,{branch,authorized=false,fetchImpl=fetch,token=process.env.GITHUB_TOKEN}={}){
+export async function executeGithubPatchProposal(proposal,{branch,authorized=false,fetchImpl=fetch,token=process.env.GITHUB_TOKEN,env=process.env,extraRepos=[]}={}){
  const p=validateGithubPatchProposal(proposal);
+ const ref=parseRepoRef(p.repository,{env,extraRepos});
  safeBranch(branch);
  if(authorized!==true)throw new Error('Explicit write authorization required');
  if(typeof token!=='string'||!token)throw new Error('GitHub token required for writes');
- const pre=await githubPatchPreflight(p,{fetchImpl,token});
+ const pre=await githubPatchPreflight(p,{fetchImpl,token,env,extraRepos});
  if(!pre.allPreconditionsMatch)throw new Error('Patch preflight failed');
- const root='https://api.github.com/repos/'+OWNER+'/'+p.repository;
+ const root='https://api.github.com/repos/'+ref.fullName;
  const headers={Accept:'application/vnd.github+json','Content-Type':'application/json','User-Agent':'HAK-Operations-Dashboard',Authorization:'Bearer '+token};
  async function request(path,method='GET',body){
   const r=await fetchImpl(root+path,{method,headers,redirect:'error',signal:AbortSignal.timeout(12000),...(body===undefined?{}:{body:JSON.stringify(body)})});
@@ -18,7 +19,7 @@ export async function executeGithubPatchProposal(proposal,{branch,authorized=fal
   return r.json();
  }
  const target=await request('');
- if(target?.full_name!==OWNER+'/'+p.repository||target?.default_branch!=='main'||target?.archived===true||target?.disabled===true)throw new Error('Repository identity, default branch or writable state mismatch; patch blocked');
+ if(target?.full_name!==ref.fullName||target?.default_branch!=='main'||target?.archived===true||target?.disabled===true)throw new Error('Repository identity, default branch or writable state mismatch; patch blocked');
  const base=await request('/git/ref/heads/main');
  if(!SHA.test(base?.object?.sha||'')||base.object.sha!==p.baseSha)throw new Error('Default branch advanced; refresh proposal');
  // Re-read every file immediately before preparing the tree.

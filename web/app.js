@@ -129,12 +129,50 @@ async function refreshJobs(){
   }
  }catch{$('job-message').textContent='Không tải được công việc';}
 }
+async function loadAllowedRepos(){
+ try{
+  const r=await fetch('/api/repos/allowed',{cache:'no-store'});
+  if(!r.ok)return;
+  const data=await r.json();
+  const sel=$('job-target-repo');
+  for(const repo of data.repositories||[]){
+   const opt=document.createElement('option');
+   opt.value=repo.fullName;opt.textContent=repo.fullName;
+   sel.append(opt);
+  }
+ }catch{}
+}
+$('find-skills-btn').addEventListener('click',async()=>{
+ const q=($('job-title').value+' '+$('job-description').value).trim();
+ const role=$('job-role').value;
+ $('skill-suggestions').replaceChildren(el('p','Đang tìm skill phù hợp…'));
+ try{
+  const r=await fetch('/api/skills/find?q='+encodeURIComponent(q)+'&role='+encodeURIComponent(role),{cache:'no-store'});
+  if(!r.ok)throw Error('Skill API unavailable');
+  const data=await r.json();
+  $('skill-suggestions').replaceChildren();
+  if(!(data.skills||[]).length){$('skill-suggestions').append(el('p','Không tìm thấy skill phù hợp'));return;}
+  for(const s of data.skills){
+   const card=el('article',undefined,'repo');
+   card.append(el('h3',s.name),el('p',s.source));
+   const btn=el('button','Chọn skill');btn.type='button';
+   btn.addEventListener('click',()=>{
+    const cur=$('job-skills').value.split(',').map(x=>x.trim()).filter(Boolean);
+    if(!cur.includes(s.name)){cur.push(s.name);$('job-skills').value=cur.join(', ');}
+   });
+   card.append(btn);
+   $('skill-suggestions').append(card);
+  }
+ }catch(e){$('skill-suggestions').replaceChildren(el('p',e.message,'warning'));}
+});
 $('agent-job-form').addEventListener('submit',async e=>{
  e.preventDefault();
  const button=$('agent-job-form').querySelector('button[type=submit]');
  button.disabled=true;$('job-message').textContent='Đang gửi công việc…';
  try{
-  const r=await fetch('/api/operator/jobs',{method:'POST',headers:{'Content-Type':'application/json','X-HAK-Operator-Token':operatorToken},body:JSON.stringify({title:$('job-title').value,description:$('job-description').value,role:$('job-role').value,confirm:$('job-confirm').checked})});
+  const skills=$('job-skills').value.split(',').map(x=>x.trim()).filter(Boolean);
+  const targetRepo=$('job-target-repo').value||undefined;
+  const r=await fetch('/api/operator/jobs',{method:'POST',headers:{'Content-Type':'application/json','X-HAK-Operator-Token':operatorToken},body:JSON.stringify({title:$('job-title').value,description:$('job-description').value,role:$('job-role').value,targetRepo,skills,confirm:$('job-confirm').checked})});
   const result=await r.json();
   if(!r.ok)throw Error(result.error||'Request failed');
   $('job-message').textContent='Đã nhận công việc '+result.id+'. Nhấn Cập nhật công việc để xem kết quả.';
@@ -143,4 +181,4 @@ $('agent-job-form').addEventListener('submit',async e=>{
  finally{button.disabled=false;}
 });
 $('refresh-jobs').addEventListener('click',refreshJobs);
-operatorSession();refreshJobs();
+operatorSession();refreshJobs();loadAllowedRepos();
