@@ -48,9 +48,16 @@ export function getSkillRepositories(){
  return raw.map(item=>normalizeEntry(item,defaultOwner)).filter(Boolean);
 }
 
+export function parseTargetRepo(name,defaultOwner=DEFAULT_OWNER){
+ const parsed=normalizeEntry(name,defaultOwner);
+ if(!parsed)throw new Error('Invalid target repository format; expected owner/repo or repo name');
+ return parsed;
+}
+
 export function parseRepoRef(name,options={}){
  const parsed=normalizeEntry(name,DEFAULT_OWNER);
  if(!parsed)throw new Error('Repository not allowlisted');
+ if(options?.allowAnyTarget===true)return parsed;
  const allowed=getAllowedRepositories(options);
  const match=allowed.find(entry=>entry.fullName===parsed.fullName);
  if(!match)throw new Error('Repository not allowlisted');

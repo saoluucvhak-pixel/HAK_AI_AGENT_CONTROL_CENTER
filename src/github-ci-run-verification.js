@@ -1,6 +1,6 @@
 import {parseRepoRef} from './github.js';
-export async function githubVerifiedCiRun(name,runId,expectedSha,{fetchImpl=fetch,token=process.env.GITHUB_TOKEN,env=process.env,extraRepos=[]}={}){
- const ref=parseRepoRef(name,{env,extraRepos});
+export async function githubVerifiedCiRun(name,runId,expectedSha,{fetchImpl=fetch,token=process.env.GITHUB_TOKEN,env=process.env,extraRepos=[],allowAnyTarget=false}={}){
+ const ref=parseRepoRef(name,{env,extraRepos,allowAnyTarget});
  if(!Number.isSafeInteger(runId)||runId<1)throw new Error('Invalid run ID');
  if(typeof expectedSha!=='string'||!/^[a-f0-9]{40}$/.test(expectedSha))throw new Error('Full expected commit SHA required');
  const headers={Accept:'application/vnd.github+json','User-Agent':'HAK-Operations-Dashboard'};

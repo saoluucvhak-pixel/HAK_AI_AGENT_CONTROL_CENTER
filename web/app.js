@@ -142,11 +142,12 @@ async function loadAllowedRepos(){
   const r=await fetch('/api/repos/allowed',{cache:'no-store'});
   if(!r.ok)return;
   const data=await r.json();
-  const sel=$('job-target-repo');
+  const list=$('allowed-repos-list');
+  if(!list)return;
   for(const repo of data.repositories||[]){
    const opt=document.createElement('option');
-   opt.value=repo.fullName;opt.textContent=repo.fullName;
-   sel.append(opt);
+   opt.value=repo.fullName;
+   list.append(opt);
   }
  }catch{}
 }

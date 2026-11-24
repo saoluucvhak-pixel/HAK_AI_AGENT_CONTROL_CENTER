@@ -1,10 +1,10 @@
-import {parseRepoRef} from './github.js';
+import {parseTargetRepo} from './github.js';
 import {githubSourceInspection} from './github-source-inspection.js';
 import {githubFailedJobTriage} from './github-ci-triage.js';
 import {validateGithubPatchProposal} from './github-patch-proposal.js';
 import {discoverAllSkills,fetchGithubSkill,findSkills} from './skills-registry.js';
 
-export function extractPatchProposalFromText(text,{repository,runId,baseSha,rationale}={}){
+export function extractPatchProposalFromText(text,{repository,runId,baseSha,rationale,allowAnyTarget=true}={}){
  if(typeof text!=='string'||!text.trim())throw new Error('Empty AI output');
  const fenced=text.match(/```json\s*([\s\S]*?)\s*```/i);
  const rawJson=fenced?fenced[1]:text.trim();
@@ -18,7 +18,7 @@ export function extractPatchProposalFromText(text,{repository,runId,baseSha,rati
   baseSha:parsed?.baseSha||baseSha,
   rationale:parsed?.rationale||rationale||'AI-proposed patch from HAK Control Center',
   changes
- });
+ },{allowAnyTarget});
 }
 
 export async function prepareRepoWorkflow({
@@ -36,12 +36,12 @@ export async function prepareRepoWorkflow({
  env=process.env,
  extraRepos=[]
 }={}){
- const ref=parseRepoRef(targetRepo,{env,extraRepos});
+ const ref=parseTargetRepo(targetRepo);
  let ciTriage=null;
  let effectivePaths=Array.isArray(paths)?[...paths]:[];
  let effectiveQuery=String(query||'');
  if(Number.isSafeInteger(runId)&&runId>0){
-  ciTriage=await githubFailedJobTriage(ref.fullName,runId,{fetchImpl,token,env,extraRepos});
+  ciTriage=await githubFailedJobTriage(ref.fullName,runId,{fetchImpl,token,env,extraRepos,allowAnyTarget:true});
   const hints=ciTriage.reports.flatMap(r=>r.fileHints||[]);
   if(effectivePaths.length===0&&hints.length>0)effectivePaths=[...new Set(hints)].slice(0,10);
   if(!effectiveQuery.trim()){
@@ -74,7 +74,7 @@ export async function prepareRepoWorkflow({
 
  let inspection=null;
  if(typeof commitSha==='string'&&/^[a-f0-9]{40}$/.test(commitSha)&&effectivePaths.length>0){
-  inspection=await githubSourceInspection(ref.fullName,commitSha,effectivePaths,{fetchImpl,token,env,extraRepos});
+  inspection=await githubSourceInspection(ref.fullName,commitSha,effectivePaths,{fetchImpl,token,env,extraRepos,allowAnyTarget:true});
  }
 
  return {

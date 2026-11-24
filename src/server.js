@@ -5,7 +5,7 @@ import {resolve,join} from 'node:path';
 import {executeApprovedWorkOrder} from './agent-engine.js';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
-import {snapshots,safeRepo,getAllowedRepositories,parseRepoRef} from './github.js';
+import {snapshots,safeRepo,getAllowedRepositories,parseTargetRepo} from './github.js';
 import {discoverAllSkills,findSkills} from './skills-registry.js';
 import {prepareRepoWorkflow,extractPatchProposalFromText} from './orchestrator.js';
 import {executeGithubPatchProposal} from './github-patch-executor.js';
@@ -107,14 +107,14 @@ export const server=createServer(async(req,res)=>{
        body.confirm!==true)throw Error('Invalid or unconfirmed task');
     if(body.targetRepo!==undefined&&body.targetRepo!==null&&body.targetRepo!==''){
      if(typeof body.targetRepo!=='string')throw Error('Invalid target repository');
-     parseRepoRef(body.targetRepo);
+     parseTargetRepo(body.targetRepo);
     }
     if(body.skills!==undefined){
      if(!Array.isArray(body.skills)||body.skills.length>5||body.skills.some(s=>typeof s!=='string'||s.length>80))throw Error('Invalid skills list');
     }
    }catch{sendJson(res,400,{error:'Invalid task or missing confirmation'});return;}
    const id=randomBytes(12).toString('hex');
-   const targetRepo=typeof body.targetRepo==='string'&&body.targetRepo.trim()?parseRepoRef(body.targetRepo.trim()).fullName:null;
+   const targetRepo=typeof body.targetRepo==='string'&&body.targetRepo.trim()?parseTargetRepo(body.targetRepo.trim()).fullName:null;
    const requestedSkills=Array.isArray(body.skills)?body.skills.map(s=>s.trim()).filter(Boolean):[];
    const commitSha=typeof body.commitSha==='string'&&/^[a-f0-9]{40}$/.test(body.commitSha.trim())?body.commitSha.trim():null;
    const runId=Number.isSafeInteger(body.runId)&&body.runId>0?body.runId:null;
@@ -172,7 +172,7 @@ export const server=createServer(async(req,res)=>{
    try{
     body=await readBody(req);
     if(!body||typeof body!=='object'||Array.isArray(body)||typeof body.targetRepo!=='string')throw Error('Invalid body');
-    parseRepoRef(body.targetRepo);
+    parseTargetRepo(body.targetRepo);
    }catch{sendJson(res,400,{error:'Invalid workflow preparation request'});return;}
    try{
     const wf=await prepareRepoWorkflow({
@@ -205,9 +205,10 @@ export const server=createServer(async(req,res)=>{
      repository:body.repository,
      runId:body.runId,
      baseSha:body.baseSha,
-     rationale:body.rationale
+     rationale:body.rationale,
+     allowAnyTarget:true
     });
-    const result=await executeGithubPatchProposal(proposal,{branch:body.branch.trim(),authorized:true});
+    const result=await executeGithubPatchProposal(proposal,{branch:body.branch.trim(),authorized:true,allowAnyTarget:true});
     sendJson(res,201,result);
    }catch(err){sendJson(res,400,{error:String(err.message||err)});}
    return;
