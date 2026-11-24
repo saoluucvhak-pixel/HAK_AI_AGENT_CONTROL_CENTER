@@ -5,7 +5,9 @@ import {resolve,join} from 'node:path';
 import {executeApprovedWorkOrder} from './agent-engine.js';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
-import {snapshots,safeRepo} from './github.js';
+import {snapshots,safeRepo,getAllowedRepositories,parseRepoRef} from './github.js';
+import {discoverAllSkills,findSkills} from './skills-registry.js';
+import {prepareRepoWorkflow} from './orchestrator.js';
 import {createSnapshotCache} from './github-snapshot-cache.js';
 import {githubPrEvidence} from './github-pr-evidence.js';
 import {assessGithubPrEvidence} from './github-pr-assessment.js';
@@ -102,17 +104,33 @@ export const server=createServer(async(req,res)=>{
        typeof body.description!=='string'||!body.description.trim()||body.description.length>4000||
        !['architecture','ui','backend','data','security','testing','quality','ocr'].includes(body.role)||
        body.confirm!==true)throw Error('Invalid or unconfirmed task');
+    if(body.targetRepo!==undefined&&body.targetRepo!==null&&body.targetRepo!==''){
+     if(typeof body.targetRepo!=='string')throw Error('Invalid target repository');
+     parseRepoRef(body.targetRepo);
+    }
+    if(body.skills!==undefined){
+     if(!Array.isArray(body.skills)||body.skills.length>5||body.skills.some(s=>typeof s!=='string'||s.length>80))throw Error('Invalid skills list');
+    }
    }catch{sendJson(res,400,{error:'Invalid task or missing confirmation'});return;}
    const id=randomBytes(12).toString('hex');
-   const job={id,title:body.title.trim(),status:'running',steps:[],error:null};
+   const targetRepo=typeof body.targetRepo==='string'&&body.targetRepo.trim()?parseRepoRef(body.targetRepo.trim()).fullName:null;
+   const requestedSkills=Array.isArray(body.skills)?body.skills.map(s=>s.trim()).filter(Boolean):[];
+   const job={id,title:body.title.trim(),targetRepo,status:'running',steps:[],error:null};
    try{await persistJob(job)}catch{sendJson(res,503,{error:'Local job storage unavailable'});return;}
    jobs.set(id,job);activeJob=true;
    sendJson(res,202,{id,status:'running'});
    void (async()=>{
     try{
+     let resolvedSkills=[];
+     if(targetRepo||requestedSkills.length>0){
+      const wf=await prepareRepoWorkflow({targetRepo:targetRepo||'HAK_AI_AGENT_CONTROL_CENTER',query:body.title+' '+body.description,role:body.role,requestedSkills,includeRemoteSkills:requestedSkills.length>0});
+      resolvedSkills=wf.skills;
+     }
      const result=await executeApprovedWorkOrder({
       workOrder:{id,projectId:'HAK',title:job.title,description:body.description,acceptanceCriteria:['Return a reviewable proposal']},
       roles:[body.role],
+      skills:resolvedSkills,
+      targetRepo,
       approval:{approved:true,workOrderId:id,approvedBy:'local-operator',reason:'Explicit confirmed local UI action'},
       verifyApproval:async({approval})=>approval.workOrderId===id&&approval.approved===true,
       saveOutput:async({taskId,content})=>{
@@ -185,6 +203,20 @@ export const server=createServer(async(req,res)=>{
    const graph=topology(cache||[]);
    res.writeHead(200,{'Content-Type':path.endsWith('.mmd')?'text/plain; charset=utf-8':'application/json; charset=utf-8'});
    res.end(path.endsWith('.mmd')?toMermaid(graph):JSON.stringify(graph));return;
+  }
+  if(path==='/api/repos/allowed'){
+   res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+   res.end(JSON.stringify({repositories:getAllowedRepositories()}));return;
+  }
+  if(path==='/api/skills/find'){
+   const url=new URL(req.url||'/', 'http://localhost');
+   const q=url.searchParams.get('q')||'';
+   const role=url.searchParams.get('role')||'';
+   const includeRemote=url.searchParams.get('remote')!=='false';
+   const all=await discoverAllSkills({includeRemoteSkills:includeRemote,includeRemote});
+   const matched=findSkills(q,{role,skills:all,limit:15});
+   res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+   res.end(JSON.stringify({skills:matched.map(({name,description,source})=>({name,description,source}))}));return;
   }
   if(path==='/api/repos'){
    await cachedSnapshots();

@@ -1,0 +1,16 @@
+{
+  "defaultOwner": "saoluucvhak-pixel",
+  "repositories": [
+    "saoluucvhak-pixel/HAK_AI_AGENT_CONTROL_CENTER",
+    "saoluucvhak-pixel/HAK_AI_SKILLS",
+    "saoluucvhak-pixel/HAK_CODE_QUALITY_TEST",
+    "saoluucvhak-pixel/HAK_OCR_ENGINE",
+    "saoluucvhak-pixel/HAK_SMART_FILTER",
+    "saoluucvhak-pixel/HAK_ACCOUNTING_REPORT_STANDARD",
+    "saoluucvhak-pixel/HAK_KHO_OFFLINE"
+  ],
+  "skillRepositories": [
+    "saoluucvhak-pixel/HAK_AI_SKILLS",
+    "vercel-labs/skills"
+  ]
+}

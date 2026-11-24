@@ -1,11 +1,10 @@
-import {safeRepo} from './github.js';
-const OWNER='saoluucvhak-pixel';
-export async function githubPrEvidence(name,number,{fetchImpl=fetch,token=process.env.GITHUB_TOKEN}={}){
- safeRepo(name);
+import {parseRepoRef} from './github.js';
+export async function githubPrEvidence(name,number,{fetchImpl=fetch,token=process.env.GITHUB_TOKEN,env=process.env,extraRepos=[]}={}){
+ const ref=parseRepoRef(name,{env,extraRepos});
  if(!Number.isSafeInteger(number)||number<1)throw new Error('Invalid PR number');
  const headers={Accept:'application/vnd.github+json','User-Agent':'HAK-Operations-Dashboard'};
  if(token)headers.Authorization='Bearer '+token;
- const root='https://api.github.com/repos/'+OWNER+'/'+name;
+ const root='https://api.github.com/repos/'+ref.fullName;
  async function read(path){
   const response=await fetchImpl(root+path,{headers,signal:AbortSignal.timeout(8000)});
   if(!response.ok)throw new Error('GitHub HTTP '+response.status);
