@@ -1,5 +1,6 @@
 import {readFileSync,readdirSync,existsSync} from 'node:fs';
-import {join} from 'node:path';
+import {join,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {skillObservation} from './core.js';
 
@@ -7,8 +8,19 @@ const SKILL_NAME=/^(?:hak-[a-z0-9][a-z0-9-]{1,62}|archify)$/;
 const MAX_SKILL_BYTES=64000;
 const DEFAULT_OWNER='saoluucvhak-pixel';
 const DEFAULT_SKILL_REPO='HAK_AI_SKILLS';
+const EMBEDDED_SKILLS_DIR=resolve(fileURLToPath(new URL('../skills',import.meta.url)));
 
 const sha256=text=>createHash('sha256').update(text,'utf8').digest('hex');
+
+export function resolveDefaultSkillsDir(customDir=''){
+ if(customDir&&existsSync(customDir))return customDir;
+ if(existsSync(EMBEDDED_SKILLS_DIR))return EMBEDDED_SKILLS_DIR;
+ const peerSkills=resolve(process.cwd(),'..','HAK_AI_SKILLS','skills');
+ if(existsSync(peerSkills))return peerSkills;
+ const peerRoot=resolve(process.cwd(),'..','HAK_AI_SKILLS');
+ if(existsSync(peerRoot))return peerRoot;
+ return null;
+}
 
 export function safeSkillName(name){
  if(typeof name!=='string'||!SKILL_NAME.test(name))throw new Error('Invalid HAK skill identifier');
@@ -59,10 +71,19 @@ export function recommendSkillsForMission({type='bug',description='',filePaths=[
 export async function loadSkillDefinition(skillName,{localSkillsDir='',fetchImpl=fetch,token=process.env.GITHUB_TOKEN,owner=DEFAULT_OWNER,skillRepo=DEFAULT_SKILL_REPO,ref='main'}={}){
  const safeName=safeSkillName(skillName);
  if(localSkillsDir){
-  const file=join(localSkillsDir,safeName,'SKILL.md');
+  let file=join(localSkillsDir,safeName,'SKILL.md');
+  if(!existsSync(file))file=join(localSkillsDir,'skills',safeName,'SKILL.md');
   if(!existsSync(file))throw new Error('Skill not found in local catalog: '+safeName);
   const raw=readFileSync(file,'utf8');
   return {...parseSkillMarkdown(safeName,raw),source:'local-skill-catalog'};
+ }
+ if(fetchImpl===fetch&&existsSync(EMBEDDED_SKILLS_DIR)){
+  let file=join(EMBEDDED_SKILLS_DIR,safeName,'SKILL.md');
+  if(!existsSync(file))file=join(EMBEDDED_SKILLS_DIR,'skills',safeName,'SKILL.md');
+  if(existsSync(file)){
+   const raw=readFileSync(file,'utf8');
+   return {...parseSkillMarkdown(safeName,raw),source:'embedded-skill-catalog'};
+  }
  }
  if(!/^[A-Za-z0-9_.-]{1,100}$/.test(owner)||!/^[A-Za-z0-9_.-]{1,100}$/.test(skillRepo)||!/^[A-Za-z0-9_./-]{1,120}$/.test(ref)||ref.includes('..'))
   throw new Error('Invalid GitHub skill catalog coordinates');
@@ -90,12 +111,14 @@ export async function loadSkills(skillNames,options={}){
  return loaded;
 }
 
-export function listLocalSkillCatalog(localSkillsDir){
- if(typeof localSkillsDir!=='string'||!localSkillsDir.trim()||!existsSync(localSkillsDir))
+export function listLocalSkillCatalog(localSkillsDir=''){
+ const target=resolveDefaultSkillsDir(localSkillsDir);
+ if(!target||!existsSync(target))
   throw new Error('Local skills directory unavailable');
- const dirs=readdirSync(localSkillsDir,{withFileTypes:true}).filter(d=>d.isDirectory()&&SKILL_NAME.test(d.name)).map(d=>d.name).sort();
+ const dir=existsSync(join(target,'skills'))&&!readdirSync(target).some(d=>SKILL_NAME.test(d))?join(target,'skills'):target;
+ const dirs=readdirSync(dir,{withFileTypes:true}).filter(d=>d.isDirectory()&&SKILL_NAME.test(d.name)).map(d=>d.name).sort();
  return dirs.map(name=>{
-  const parsed=parseSkillMarkdown(name,readFileSync(join(localSkillsDir,name,'SKILL.md'),'utf8'));
+  const parsed=parseSkillMarkdown(name,readFileSync(join(dir,name,'SKILL.md'),'utf8'));
   return {name:parsed.name,description:parsed.description,sha256:parsed.sha256,bytes:parsed.bytes};
  });
 }
