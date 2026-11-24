@@ -7,8 +7,8 @@ export function safeSourcePath(path){
  if(path.endsWith('.txt')&&path!=='tests/fixtures/patch-acceptance.txt')throw new Error('Invalid source path');
  return path;
 }
-export async function githubSourceInspection(name,sha,paths,{fetchImpl=fetch,token=process.env.GITHUB_TOKEN,env=process.env,extraRepos=[]}={}){
- const ref=parseRepoRef(name,{env,extraRepos});
+export async function githubSourceInspection(name,sha,paths,{fetchImpl=fetch,token=process.env.GITHUB_TOKEN,env=process.env,extraRepos=[],allowAnyTarget=false}={}){
+ const ref=parseRepoRef(name,{env,extraRepos,allowAnyTarget});
  if(typeof sha!=='string'||!/^[a-f0-9]{40}$/.test(sha))throw new Error('Full commit SHA required');
  if(!Array.isArray(paths)||paths.length<1||paths.length>MAX_FILES)throw new Error('Invalid source file list');
  const unique=[...new Set(paths.map(safeSourcePath))];

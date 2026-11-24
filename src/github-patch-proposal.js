@@ -1,9 +1,9 @@
 import {safeRepo} from './github.js';
 import {safeSourcePath} from './github-source-inspection.js';
 const MAX_PATCH_BYTES=20000;
-export function validateGithubPatchProposal(proposal){
+export function validateGithubPatchProposal(proposal,{allowAnyTarget=false}={}){
  if(!proposal||typeof proposal!=='object')throw new Error('Invalid patch proposal');
- safeRepo(proposal.repository);
+ safeRepo(proposal.repository,{allowAnyTarget});
  if(!Number.isSafeInteger(proposal.runId)||proposal.runId<1)throw new Error('Invalid run ID');
  if(typeof proposal.baseSha!=='string'||!/^[a-f0-9]{40}$/.test(proposal.baseSha))throw new Error('Full base commit SHA required');
  if(!Array.isArray(proposal.changes)||proposal.changes.length<1||proposal.changes.length>5)throw new Error('Patch must contain 1 to 5 files');

@@ -3,13 +3,13 @@ import {githubPatchPreflight} from './github-patch-preflight.js';
 import {parseRepoRef} from './github.js';
 const SHA=/^[a-f0-9]{40}$/;
 function safeBranch(name){if(typeof name!=='string'||!/^hak-fix\/[a-z0-9][a-z0-9-]{2,50}$/.test(name))throw new Error('Invalid dedicated fix branch');return name;}
-export async function executeGithubPatchProposal(proposal,{branch,authorized=false,fetchImpl=fetch,token=process.env.GITHUB_TOKEN,env=process.env,extraRepos=[]}={}){
- const p=validateGithubPatchProposal(proposal);
- const ref=parseRepoRef(p.repository,{env,extraRepos});
+export async function executeGithubPatchProposal(proposal,{branch,authorized=false,fetchImpl=fetch,token=process.env.GITHUB_TOKEN,env=process.env,extraRepos=[],allowAnyTarget=false}={}){
+ const p=validateGithubPatchProposal(proposal,{allowAnyTarget});
+ const ref=parseRepoRef(p.repository,{env,extraRepos,allowAnyTarget});
  safeBranch(branch);
  if(authorized!==true)throw new Error('Explicit write authorization required');
  if(typeof token!=='string'||!token)throw new Error('GitHub token required for writes');
- const pre=await githubPatchPreflight(p,{fetchImpl,token,env,extraRepos});
+ const pre=await githubPatchPreflight(p,{fetchImpl,token,env,extraRepos,allowAnyTarget});
  if(!pre.allPreconditionsMatch)throw new Error('Patch preflight failed');
  const root='https://api.github.com/repos/'+ref.fullName;
  const headers={Accept:'application/vnd.github+json','Content-Type':'application/json','User-Agent':'HAK-Operations-Dashboard',Authorization:'Bearer '+token};

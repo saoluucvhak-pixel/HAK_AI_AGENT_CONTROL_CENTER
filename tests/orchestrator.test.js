@@ -100,3 +100,23 @@ test('extractPatchProposalFromText parses fenced JSON and validates proposal sha
  assert.equal(proposal.repository,'HAK_KHO_OFFLINE');
  assert.equal(proposal.changes[0].path,'src/app.js');
 });
+
+test('prepareRepoWorkflow accepts arbitrary valid owner/repo project without pre-listing in Control Center',async()=>{
+ const sha='e'.repeat(40);
+ const mockFetch=async(url)=>{
+  if(url.includes('/repos/any-client/new-project/contents/package.json')){
+   const b64=Buffer.from('{"name":"new-project"}','utf8').toString('base64');
+   return {ok:true,status:200,json:async()=>({type:'file',encoding:'base64',size:22,sha:'f'.repeat(40),content:b64})};
+  }
+  return {ok:false,status:404};
+ };
+ const wf=await prepareRepoWorkflow({
+  targetRepo:'any-client/new-project',
+  commitSha:sha,
+  paths:['package.json'],
+  includeRemoteSkills:false,
+  fetchImpl:mockFetch
+ });
+ assert.equal(wf.targetRepo,'any-client/new-project');
+ assert.equal(wf.inspection.files[0].status,'available');
+});
