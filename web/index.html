@@ -28,7 +28,7 @@
       <div class="workspace-grid">
         <div class="panel-card">
           <h3>Giao việc cho AI</h3>
-          <p>Chạy AI thật qua OmniRoute cục bộ. Kết quả lưu tại <code>data/agent-results</code>, không tự ý sửa mã nguồn.</p>
+          <p>Chạy AI qua Orca cục bộ khi đã bật. Kết quả lưu tại <code>data/agent-results</code>, không tự ý sửa mã nguồn.</p>
           <form id="agent-job-form" class="form-stack">
             <div class="form-row">
               <label>Tên công việc <input id="job-title" maxlength="160" required placeholder="vd: Sửa lỗi test hoặc review bảo mật"></label>
@@ -160,7 +160,7 @@
       <div class="layers">
         <article><h3>Kiến trúc · Archify</h3><p>Chưa kết nối runtime; cần sơ đồ dựa trên mã nguồn và commit xác minh.</p></article>
         <article><h3>Agent · Task Observer</h3><p>Có thể nhận sự kiện agent qua API cục bộ có xác thực; chưa có adapter Ruflo thực tế.</p></article>
-        <article><h3>Model · OmniRoute</h3><p>Chưa có số liệu token, chi phí hoặc model trực tiếp.</p></article>
+        <article><h3>Agent · Orca CLI</h3><p>Hỗ trợ khởi chạy bot qua Orca CLI cục bộ khi bật <code>HAK_ORCA_EXECUTION_ENABLED=true</code>.</p></article>
         <article><h3>OCR · HAK OCR Engine</h3><p>Chưa có thống kê độ chính xác hay chứng từ thực tế.</p></article>
       </div>
     </section>

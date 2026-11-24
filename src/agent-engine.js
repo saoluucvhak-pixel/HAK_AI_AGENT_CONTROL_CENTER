@@ -1,5 +1,4 @@
 import {createWorkOrder,proposeDelegation} from './chief-of-staff.js';
-import {routeModel} from './integrations.js';
 import {createHash} from 'node:crypto';
 
 const ROLES={architecture:'orchestrator',ui:'coder',backend:'coder',data:'coder',security:'reviewer',testing:'tester',quality:'reviewer',release:'orchestrator',ocr:'ocr'};
@@ -31,7 +30,7 @@ function formatSkillContext(skills){
  * invokes shell commands or marks provider identity / production as verified.
  * Output content is intentionally excluded from the audit report.
  */
-export async function executeApprovedWorkOrder({workOrder,roles,skills=[],targetRepo=null,approval,env=process.env,modelRunner=routeModel,onEvent=async()=>{},verifyApproval,saveOutput}={}){
+export async function executeApprovedWorkOrder({workOrder,roles,skills=[],targetRepo=null,approval,env=process.env,modelRunner,onEvent=async()=>{},verifyApproval,saveOutput}={}){
  const order=createWorkOrder(workOrder);
  const proposal=proposeDelegation(order,roles);
  if(!approval||approval.approved!==true||approval.workOrderId!==order.id||
@@ -43,7 +42,6 @@ export async function executeApprovedWorkOrder({workOrder,roles,skills=[],target
  const approvalVerified=await verifyApproval({workOrderId:order.id,projectId:order.projectId,approval});
  if(approvalVerified!==true)throw new Error('Approval not verified by trusted authority');
  if(env.HAK_AGENT_EXECUTION_ENABLED!=='true')throw new Error('Agent execution disabled');
- if(env.HAK_OMNIROUTE_ENABLED!=='true')throw new Error('Model gateway disabled');
  if(typeof modelRunner!=='function'||typeof onEvent!=='function')throw new Error('Invalid execution dependencies');
  const skillCtx=formatSkillContext(skills);
  const repoLine=typeof targetRepo==='string'&&targetRepo.trim()?'\nTarget repository: '+targetRepo.trim():'';

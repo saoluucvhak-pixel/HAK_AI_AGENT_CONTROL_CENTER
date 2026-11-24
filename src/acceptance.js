@@ -3,8 +3,6 @@ export const ACCEPTANCE=Object.freeze([
  {id:'control-runtime',label:'Dashboard and local API',evidence:'runtime-smoke',verified:true},
  {id:'observer-persistence',label:'Task Observer durable local events',evidence:'restart-smoke',verified:true},
  {id:'chief-of-staff',label:'Chief of Staff planning and merge policy',evidence:'unit-tests',verified:true},
- {id:'omniroute-contract',label:'OmniRoute local gateway protocol',evidence:'mock-http-contract',verified:true},
- {id:'omniroute-live',label:'OmniRoute real provider routing and billing',evidence:null,verified:false},
  {id:'ruflo-live',label:'Ruflo multi-agent execution',evidence:null,verified:false},
  {id:'claude-mem-live',label:'Claude-Mem real persistent memory',evidence:null,verified:false},
  {id:'archify-live',label:'Archify interactive rendering',evidence:null,verified:false},

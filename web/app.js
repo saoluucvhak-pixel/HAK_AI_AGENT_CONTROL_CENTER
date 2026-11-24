@@ -79,7 +79,7 @@ async function checkTools(){
  try{
   const r=await fetch('/api/diagnostics',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);
   const report=await r.json();$('diagnostics').replaceChildren();
-  const labels={'omniroute':'OmniRoute','ruflo':'Ruflo','claude-mem':'Claude-Mem','archify':'Archify','ocr':'HAK OCR'};
+  const labels={'ruflo':'Ruflo','claude-mem':'Claude-Mem','archify':'Archify','ocr':'HAK OCR'};
   const statuses={'not-configured':'Chưa cấu hình','endpoint-reachable':'Kết nối HTTP được (chưa xác minh chức năng)','http-error':'Dịch vụ trả lỗi HTTP','unreachable-or-invalid':'Không kết nối được hoặc URL không hợp lệ'};
   for(const check of report.checks||[]){
    const card=el('article',undefined,'repo');
@@ -98,7 +98,7 @@ async function operatorSession(){
   const r=await fetch('/api/operator/session',{cache:'no-store'});
   if(!r.ok)throw Error('Session unavailable');
   const data=await r.json();operatorToken=data.token;
-  $('job-message').textContent=data.enabled?'AI đã bật. Có thể giao việc không nhạy cảm.':'Chưa bật AI. Cần cấu hình OmniRoute và HAK_AGENT_EXECUTION_ENABLED=true trên máy.';
+  $('job-message').textContent=data.enabled?'AI (Orca) đã bật. Có thể giao việc không nhạy cảm.':'Chưa bật AI. Cần cấu hình HAK_AGENT_EXECUTION_ENABLED=true và HAK_ORCA_EXECUTION_ENABLED=true.';
  }catch{$('job-message').textContent='Không kết nối được phiên điều hành cục bộ';}
 }
 async function refreshJobs(){

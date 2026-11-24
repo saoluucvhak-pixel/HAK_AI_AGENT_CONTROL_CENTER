@@ -2,7 +2,6 @@ const GATES={
  'windows-desktop':'Run dashboard on the actual Windows workstation, restart it, and verify Observer replay.',
  'ruflo-live':'Execute an approved two-agent Ruflo task and independently review trace and outputs.',
  'claude-mem-live':'Verify scoped memory write, restart, retrieval, isolation and retention.',
- 'omniroute-live':'Run an explicitly approved real gateway challenge and verify provider/cost evidence.',
  'archify-live':'Generate and review a source-linked diagram from the real repository.',
  'ocr-live':'Run the OCR engine against a labeled approved dataset and record accuracy.',
  'security-review':'Complete RBAC, secrets, recovery and independent security sign-off.'
