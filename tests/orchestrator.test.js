@@ -120,3 +120,29 @@ test('prepareRepoWorkflow accepts arbitrary valid owner/repo project without pre
  assert.equal(wf.targetRepo,'any-client/new-project');
  assert.equal(wf.inspection.files[0].status,'available');
 });
+
+test('prepareRepoWorkflow supports fix-and-verify workflowMode with codex-security skills',async()=>{
+ const mockFetch=async(url)=>{
+  if(url.endsWith('/repos/openai/codex-security/contents/plugins/codex-security/skills')){
+   return {ok:true,status:200,json:async()=>[
+    {type:'dir',name:'triage-finding',path:'plugins/codex-security/skills/triage-finding'},
+    {type:'dir',name:'fix-finding',path:'plugins/codex-security/skills/fix-finding'},
+    {type:'dir',name:'verify-fix',path:'plugins/codex-security/skills/verify-fix'}
+   ]};
+  }
+  if(url.includes('/plugins/codex-security/skills/')){
+   const name=url.split('/').slice(-2)[0];
+   const b64=Buffer.from(`---\nname: ${name}\ndescription: ${name}\n---\n# ${name}`,'utf8').toString('base64');
+   return {ok:true,status:200,json:async()=>({type:'file',encoding:'base64',size:64,content:b64})};
+  }
+  return {ok:false,status:404};
+ };
+ const wf=await prepareRepoWorkflow({
+  targetRepo:'any-client/new-project',
+  workflowMode:'fix-and-verify',
+  fetchImpl:mockFetch
+ });
+ assert.deepEqual(wf.recommendedRoles,['testing','backend','quality']);
+ assert.deepEqual(wf.skills.map(s=>s.name),['triage-finding','fix-finding','verify-fix']);
+ assert.equal(wf.blockedSkills.length,0);
+});

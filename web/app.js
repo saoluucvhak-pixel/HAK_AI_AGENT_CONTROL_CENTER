@@ -185,7 +185,8 @@ $('agent-job-form').addEventListener('submit',async e=>{
   const runIdRaw=Number($('job-run-id').value);
   const runId=Number.isSafeInteger(runIdRaw)&&runIdRaw>0?runIdRaw:undefined;
   const paths=$('job-paths').value.split(',').map(x=>x.trim()).filter(Boolean);
-  const r=await fetch('/api/operator/jobs',{method:'POST',headers:{'Content-Type':'application/json','X-HAK-Operator-Token':operatorToken},body:JSON.stringify({title:$('job-title').value,description:$('job-description').value,role:$('job-role').value,targetRepo,commitSha,runId,paths,skills,confirm:$('job-confirm').checked})});
+  const workflowMode=$('job-fix-verify')?.checked?'fix-and-verify':'single';
+  const r=await fetch('/api/operator/jobs',{method:'POST',headers:{'Content-Type':'application/json','X-HAK-Operator-Token':operatorToken},body:JSON.stringify({title:$('job-title').value,description:$('job-description').value,role:$('job-role').value,targetRepo,commitSha,runId,paths,skills,workflowMode,confirm:$('job-confirm').checked})});
   const result=await r.json();
   if(!r.ok)throw Error(result.error||'Request failed');
   $('job-message').textContent='Đã nhận công việc '+result.id+'. Nhấn Cập nhật công việc để xem kết quả.';

@@ -2,7 +2,7 @@ import {parseTargetRepo} from './github.js';
 import {githubSourceInspection} from './github-source-inspection.js';
 import {githubFailedJobTriage} from './github-ci-triage.js';
 import {validateGithubPatchProposal} from './github-patch-proposal.js';
-import {discoverAllSkills,fetchGithubSkill,findSkills} from './skills-registry.js';
+import {discoverAllSkills,fetchGithubSkill,findSkills,auditSkillSafety} from './skills-registry.js';
 
 export function extractPatchProposalFromText(text,{repository,runId,baseSha,rationale,allowAnyTarget=true}={}){
  if(typeof text!=='string'||!text.trim())throw new Error('Empty AI output');
@@ -28,6 +28,7 @@ export async function prepareRepoWorkflow({
  paths=[],
  query='',
  role='backend',
+ workflowMode='single',
  requestedSkills=[],
  localSkillsDir='./skills',
  includeRemoteSkills=true,
@@ -53,23 +54,30 @@ export async function prepareRepoWorkflow({
  if(Array.isArray(requestedSkills)&&requestedSkills.length>0){
   const wanted=new Set(requestedSkills);
   selected=catalog.filter(s=>wanted.has(s.name));
+ }else if(workflowMode==='fix-and-verify'){
+  const pipelineNames=new Set(['triage-finding','fix-finding','verify-fix','hak-code-auditor']);
+  selected=catalog.filter(s=>pipelineNames.has(s.name));
+  if(selected.length===0)selected=findSkills(effectiveQuery,{role,skills:catalog,limit:3});
  }else{
   selected=findSkills(effectiveQuery,{role,skills:catalog,limit:3});
  }
 
  const resolvedSkills=[];
+ const blockedSkills=[];
  for(const skill of selected.slice(0,5)){
-  if(skill.body){
-   resolvedSkills.push(skill);
-  }else if(typeof skill.source==='string'&&skill.source.startsWith('github:')){
-   const skillRepo=skill.source.slice('github:'.length);
+  let candidate=skill;
+  if(!candidate.body&&typeof candidate.source==='string'&&candidate.source.startsWith('github:')){
+   const skillRepo=candidate.source.slice('github:'.length);
    try{
-    const full=await fetchGithubSkill(skillRepo,skill.name,{fetchImpl,token,env,extraRepos});
-    resolvedSkills.push(full);
-   }catch{
-    resolvedSkills.push(skill);
-   }
+    candidate=await fetchGithubSkill(skillRepo,candidate.name,{fetchImpl,token,env,extraRepos,basePath:candidate.basePath});
+   }catch{/* Keep metadata-only entry */}
   }
+  const safety=auditSkillSafety(candidate);
+  if(safety.verdict==='BLOCK'){
+   blockedSkills.push({name:candidate.name,source:candidate.source,findings:safety.findings});
+   continue;
+  }
+  resolvedSkills.push({...candidate,safetyVerdict:safety.verdict});
  }
 
  let inspection=null;
@@ -77,12 +85,17 @@ export async function prepareRepoWorkflow({
   inspection=await githubSourceInspection(ref.fullName,commitSha,effectivePaths,{fetchImpl,token,env,extraRepos,allowAnyTarget:true});
  }
 
+ const recommendedRoles=workflowMode==='fix-and-verify'?['testing','backend','quality']:[role];
+
  return {
   schemaVersion:1,
   kind:'hak-repo-workflow-context',
   targetRepo:ref.fullName,
   role,
+  workflowMode,
+  recommendedRoles,
   skills:resolvedSkills,
+  blockedSkills,
   ciTriage,
   inspection,
   readyForExecution:true,
