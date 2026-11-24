@@ -1,0 +1,113 @@
+name: Windows release
+on:
+  workflow_dispatch:
+    inputs:
+      publish_draft:
+        description: 'Create a draft GitHub Release from this run'
+        type: boolean
+        default: false
+  push:
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packaging/**'
+      - 'scripts/build-windows.mjs'
+      - 'scripts/launch.mjs'
+      - 'scripts/stop.mjs'
+      - 'scripts/test-installer-windows.ps1'
+      - '.github/workflows/release-windows.yml'
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    permissions:
+      contents: write   # draft release only on tag / manual publish
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: npm run check
+      - run: npm test
+      - name: Read version
+        id: v
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Ensure Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe","$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { choco install innosetup -y --no-progress; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) { throw 'Inno Setup not available' }
+          "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Build current version (stage + portable zip + installer)
+        shell: pwsh
+        run: |
+          $ver = '${{ steps.v.outputs.version }}'
+          $num = ($ver -replace '-.*$','') + '.0'
+          node scripts/build-windows.mjs --out dist
+          if ($LASTEXITCODE -ne 0) { throw 'build failed' }
+          & $env:ISCC "/DMyAppVersion=$ver" "/DMyNumericVersion=$num" "/DStageDir=$PWD\dist\stage" "/DOutDir=$PWD\dist" packaging\windows\installer.iss
+          if ($LASTEXITCODE -ne 0) { throw 'ISCC failed' }
+          Compress-Archive -Path dist\stage\* -DestinationPath "dist\HAK_AI_AGENT_PORTABLE_$ver.zip"
+      - name: Build previous-version fixture for upgrade test
+        shell: pwsh
+        run: |
+          node scripts/build-windows.mjs --out dist-old --version 0.0.1-upgrade-fixture
+          if ($LASTEXITCODE -ne 0) { throw 'old build failed' }
+          & $env:ISCC "/DMyAppVersion=0.0.1-upgrade-fixture" "/DMyNumericVersion=0.0.1.0" "/DStageDir=$PWD\dist-old\stage" "/DOutDir=$PWD\dist-old" packaging\windows\installer.iss
+          if ($LASTEXITCODE -ne 0) { throw 'ISCC old failed' }
+      - name: Install / upgrade / uninstall acceptance
+        shell: pwsh
+        run: |
+          $ver = '${{ steps.v.outputs.version }}'
+          ./scripts/test-installer-windows.ps1 -OldInstaller "$PWD\dist-old\HAK_AI_AGENT_SETUP_0.0.1-upgrade-fixture.exe" -NewInstaller "$PWD\dist\HAK_AI_AGENT_SETUP_$ver.exe" -OldVersion 0.0.1-upgrade-fixture -NewVersion $ver
+      - name: Portable zip smoke test
+        shell: pwsh
+        run: |
+          $ver = '${{ steps.v.outputs.version }}'
+          $dir = Join-Path $env:RUNNER_TEMP 'hak-portable'
+          Expand-Archive "dist\HAK_AI_AGENT_PORTABLE_$ver.zip" $dir
+          $env:HAK_DATA_DIR = Join-Path $env:RUNNER_TEMP 'hak-portable-data'; $env:PORT = '47321'; $env:HAK_NO_BROWSER = '1'; $env:HAK_BACKGROUND = '1'
+          & "$dir\runtime\node.exe" "$dir\scripts\launch.mjs"
+          $h = Invoke-RestMethod http://127.0.0.1:47321/api/health
+          if ($h.version -ne $ver) { throw "portable version mismatch: $($h.version)" }
+          & "$dir\runtime\node.exe" "$dir\scripts\stop.mjs"
+      - name: Checksums and release notes
+        shell: pwsh
+        run: |
+          $ver = '${{ steps.v.outputs.version }}'
+          Copy-Item docs\RELEASE_NOTES.md dist\RELEASE_NOTES.md
+          Copy-Item docs\USER_GUIDE_VI.md dist\USER_GUIDE_VI.md
+          Copy-Item docs\ACCEPTANCE_REPORT.md dist\ACCEPTANCE_REPORT.md
+          Copy-Item installer-test-results.json dist\INSTALLER_TEST_RESULTS.json
+          Push-Location dist
+          Get-ChildItem -File | Where-Object { $_.Name -notmatch '^SHA256SUMS' } | ForEach-Object { '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } | Set-Content -Encoding ascii SHA256SUMS.txt
+          Get-Content SHA256SUMS.txt
+          Pop-Location
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hak-windows-${{ steps.v.outputs.version }}
+          path: |
+            dist/HAK_AI_AGENT_SETUP_*.exe
+            dist/HAK_AI_AGENT_PORTABLE_*.zip
+            dist/SHA256SUMS.txt
+            dist/RELEASE_NOTES.md
+            dist/USER_GUIDE_VI.md
+            dist/ACCEPTANCE_REPORT.md
+            dist/INSTALLER_TEST_RESULTS.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Draft GitHub Release (never auto-published)
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_draft)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ver = '${{ steps.v.outputs.version }}'
+          $tag = if ($env:GITHUB_REF -like 'refs/tags/*') { $env:GITHUB_REF_NAME } else { "v$ver" }
+          $flags = @('--draft','--title',"HAK AI Agent Control Center $ver (unsigned)",'--notes-file','dist/RELEASE_NOTES.md')
+          if ($ver -match '-') { $flags += '--prerelease' }
+          gh release create $tag @flags dist/HAK_AI_AGENT_SETUP_$ver.exe dist/HAK_AI_AGENT_PORTABLE_$ver.zip dist/SHA256SUMS.txt dist/USER_GUIDE_VI.md dist/ACCEPTANCE_REPORT.md dist/INSTALLER_TEST_RESULTS.json

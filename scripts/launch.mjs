@@ -1,7 +1,7 @@
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {resolve,join} from 'node:path';
-import {existsSync} from 'node:fs';
+import {existsSync,mkdirSync,openSync,statSync,renameSync} from 'node:fs';
 import {setTimeout as sleep} from 'node:timers/promises';
 
 const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
@@ -33,25 +33,54 @@ export function openBrowser(url,platform=process.platform,spawnImpl=spawn){
  if(platform==='darwin')return spawnImpl('open',[url],{stdio:'ignore',detached:true}).unref();
  return spawnImpl('xdg-open',[url],{stdio:'ignore',detached:true}).unref();
 }
+export function installedDataDir(env=process.env,platform=process.platform){
+ if(env.HAK_DATA_DIR)return env.HAK_DATA_DIR;
+ const base=platform==='win32'?env.LOCALAPPDATA:null;
+ return base?join(base,'HAK','AI_AGENT_CONTROL_CENTER'):null;
+}
+export async function choosePort(start,inspect=inspectDashboard,span=10){
+ for(let i=0;i<span;i++){
+  const port=start+i;if(port>65535)break;
+  const url='http://127.0.0.1:'+port;
+  const state=await inspect(url);
+  if(state==='running')return {port,url,state};
+  if(state==='free')return {port,url,state};
+ }
+ throw new Error('Không tìm thấy cổng trống từ '+start+' đến '+(start+span-1)+'. Đóng ứng dụng đang chiếm cổng hoặc đặt biến PORT khác.');
+}
 async function main(){
+ const installed=existsSync(join(root,'installed.json'));
+ if(installed&&!process.env.HAK_DATA_DIR){const dir=installedDataDir();if(dir)process.env.HAK_DATA_DIR=dir;}
+ const dataRoot=process.env.HAK_DATA_DIR?resolve(process.env.HAK_DATA_DIR):join(root,'data');
  const envPath=join(root,'.env');
  if(existsSync(envPath)){
   if(typeof process.loadEnvFile!=='function')throw new Error('Node.js 22+ is required to load local AI settings');
   process.loadEnvFile(envPath);
  }
- const port=validPort(process.env.PORT||4317);
- const url='http://127.0.0.1:'+port;
- const state=await inspectDashboard(url);
- if(state==='occupied')throw new Error('Port '+port+' is already used by a different service. HAK did not start a second server.');
- if(state==='running'){
+ const wanted=validPort(process.env.PORT||4317);
+ const choice=await choosePort(wanted);
+ const url=choice.url;
+ if(choice.port!==wanted)console.log('Cổng '+wanted+' đang được ứng dụng khác dùng; HAK dùng cổng '+choice.port+'.');
+ if(choice.state==='running'){
   console.log('HAK is already running: '+url);
   if(process.env.HAK_NO_BROWSER!=='1')openBrowser(url);
   return;
  }
- const child=spawn(process.execPath,['src/server.js'],{cwd:root,env:process.env,stdio:'inherit'});
+ const env={...process.env,PORT:String(choice.port)};
+ const background=process.env.HAK_BACKGROUND==='1';
+ let stdio='inherit';
+ if(background){
+  const logDir=join(dataRoot,'logs');mkdirSync(logDir,{recursive:true});
+  const logFile=join(logDir,'server.log');
+  try{if(statSync(logFile).size>5*1024*1024)renameSync(logFile,logFile+'.1');}catch{/* first run */}
+  const fd=openSync(logFile,'a');stdio=['ignore',fd,fd];
+ }
+ const child=spawn(process.execPath,['src/server.js'],{cwd:root,env,stdio,detached:background,windowsHide:true});
  try{await waitForDashboard(url,child)}catch(error){child.kill();throw error}
  console.log('HAK is ready: '+url);
+ if(background)child.unref();
  if(process.env.HAK_NO_BROWSER!=='1')openBrowser(url);
+ if(background)process.exit(0);
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  main().catch(error=>{console.error('HAK startup failed: '+error.message);process.exitCode=1});

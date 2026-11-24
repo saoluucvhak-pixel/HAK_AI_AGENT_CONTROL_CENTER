@@ -140,3 +140,9 @@ $('wo-refresh').addEventListener('click',()=>{loadOrders();loadOverview();});
 let timer=null;
 async function tick(){const active=await loadOrders();await loadOverview();clearTimeout(timer);timer=setTimeout(tick,active?2000:15000);}
 (async()=>{try{await session();resetProviderForm();await loadProviders();await tick();}catch(e){say('provider-message',e.message+'. Tải lại trang.',true);}})();
+
+$('shutdown').addEventListener('click',async()=>{
+ if(!confirm('Dừng HAK? Công việc đang chạy sẽ được đánh dấu "bị gián đoạn" và không tự chạy lại.'))return;
+ try{await api('/shutdown','POST',{});document.body.textContent='HAK đã dừng. Mở lại bằng shortcut HAK AI Agent Control Center.';}
+ catch(e){alert('Không dừng được: '+explain(e));}
+});

@@ -25,7 +25,15 @@ try {
  )
  $target = Join-Path $root '.env'
  $temp = Join-Path $root ('.env.' + [Guid]::NewGuid().ToString('N') + '.tmp')
- [IO.File]::WriteAllLines($temp, $values, (New-Object Text.UTF8Encoding($false)))
+ # Preserve every unrelated setting; keep a backup so a failed write can be rolled back.
+ $existing = @()
+ if (Test-Path -LiteralPath $target) {
+  $existing = @([IO.File]::ReadAllLines($target))
+  Copy-Item -LiteralPath $target -Destination ($target + '.bak') -Force
+ }
+ $managed = '^(HAK_AGENT_EXECUTION_ENABLED|HAK_OMNIROUTE_ENABLED|HAK_OMNIROUTE_URL|HAK_OMNIROUTE_MODEL|HAK_OMNIROUTE_API_KEY)='
+ $merged = @($existing | Where-Object { $_ -notmatch $managed }) + $values
+ [IO.File]::WriteAllLines($temp, $merged, (New-Object Text.UTF8Encoding($false)))
  Move-Item -LiteralPath $temp -Destination $target -Force
  Write-Host 'Saved local settings. Restart HAK_START_WINDOWS.cmd to apply.' -ForegroundColor Green
-} finally { $plain = $null; $values = $null }
+} catch { if ($temp -and (Test-Path -LiteralPath $temp)) { Remove-Item -LiteralPath $temp -Force }; throw } finally { $plain = $null; $values = $null }
