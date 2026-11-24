@@ -60,6 +60,7 @@ export class CodeChangeService{
   this.#repos.push(repo);await this.#reposFile.write(this.#repos);return {...repo};
  }
  #dataDirRoot(){return resolve(this.#dir);}
+ getRepo(id){return {...this.#repo(id)};}
  #repo(id){const r=this.#repos.find(x=>x.id===id);if(!r)throw new CodeChangeError('NOT_FOUND','Repository chưa được đăng ký');return r;}
  #get(id){const c=this.#items.get(id);if(!c)throw new CodeChangeError('NOT_FOUND','Không tìm thấy thay đổi mã');return c;}
  get(id){return structuredClone(this.#get(id));}
@@ -118,7 +119,7 @@ export class CodeChangeService{
   const files=(await this.#ws.listFiles(cc.repoPath,cc.baseSha,cc.scope)).sort((a,b)=>Number(exact.has(b.toLowerCase()))-Number(exact.has(a.toLowerCase()))).slice(0,MAX_CTX_FILES);
   let total=0;const parts=[];
   for(const p of files){
-   const text=await this.#ws.readAtBase(cc.repoPath,cc.baseSha,p,MAX_CTX_EACH);
+   const text=await this.#ws.readAtBase(cc.repoPath,cc.baseSha,p,MAX_CTX_EACH,{head:true});
    if(text===null||total+text.length>MAX_CTX_TOTAL)continue;
    total+=text.length;parts.push('<repo_file path="'+p+'">\n'+fence(text)+'\n</repo_file>');
   }

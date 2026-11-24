@@ -203,3 +203,34 @@ $('cc-form').addEventListener('submit',async ev=>{ev.preventDefault();
 let ccTimer=null;
 async function ccTick(){const active=await loadCode();clearTimeout(ccTimer);ccTimer=setTimeout(ccTick,active?2000:20000);}
 setTimeout(()=>{if(token)ccTick();},800);
+
+// ---------- review (read-only)
+async function loadReviews(){
+ try{
+  const [{repos},{reviews}]=await Promise.all([api('/code/repos'),api('/review')]);
+  const sel=$('rv-repo');const keep=sel.value;sel.replaceChildren();for(const r of repos)sel.append(new Option(r.name,r.id));if(keep)sel.value=keep;
+  const box=$('reviews');box.replaceChildren();let active=false;
+  for(const x of reviews){active=active||x.status==='RUNNING';box.append(await reviewCard(x.id));}
+  return active;
+ }catch(e){say('rv-message','Không tải được báo cáo: '+explain(e),true);return false;}
+}
+async function reviewCard(id){
+ const r=await api('/review/'+id);
+ const card=el('article',undefined,'repo');
+ const h=el('h3',r.repo+' @ '+r.sha.slice(0,8)+' ');h.append(el('span',r.status==='COMPLETED'?'Hoàn thành':r.status==='RUNNING'?'Đang chạy':r.status,'badge'));card.append(h);
+ card.append(el('p','Tầng: tĩnh'+(r.tiers.execute?' + thực thi':'')+(r.tiers.ai?' + AI ('+(r.ai?r.ai.status:'…')+')':'')));
+ if(r.counts)card.append(el('p',r.counts.error+' lỗi · '+r.counts.warning+' cảnh báo · '+r.counts.info+' thông tin · '+r.counts.unverified+' nhận định AI chưa xác minh',r.counts.error?'err':''));
+ for(const e of r.evidence)card.append(el('p','Công cụ '+e.check+': '+(e.passed===false||e.ok===false?'không đạt/không chạy được':'đã chạy')+(e.exitCode!==undefined&&e.exitCode!==null?' (mã '+e.exitCode+')':''),'task'));
+ const row=el('div',undefined,'row');const out=el('pre','','out');out.hidden=true;
+ const b=el('button','Xem báo cáo (Markdown)','secondary');b.type='button';
+ b.addEventListener('click',async()=>{try{out.textContent=(await api('/review/'+r.id+'/report')).markdown;}catch(e){out.textContent=explain(e);}out.hidden=!out.hidden;});
+ row.append(b);card.append(row,out);return card;
+}
+$('rv-form').addEventListener('submit',async ev=>{ev.preventDefault();
+ const execute=$('rv-exec').checked;
+ if(execute&&!confirm('Tầng thực thi sẽ CHẠY kiểm thử và cài phụ thuộc của repo trên máy này. Tiếp tục?'))return;
+ try{await api('/review','POST',{repoId:$('rv-repo').value,ref:$('rv-ref').value||undefined,execute,consentExecuteCode:execute,ai:$('rv-ai').checked});say('rv-message','Đã bắt đầu kiểm tra.');await loadReviews();}
+ catch(e){say('rv-message','Không bắt đầu được: '+explain(e),true);}});
+let rvTimer=null;
+async function rvTick(){const a=await loadReviews();clearTimeout(rvTimer);rvTimer=setTimeout(rvTick,a?2000:30000);}
+setTimeout(()=>{if(token)rvTick();},1000);

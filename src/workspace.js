@@ -85,15 +85,58 @@ export class Workspace{
   await rm(wt,{recursive:true,force:true});
   await this.#git(['worktree','prune'],{cwd:repoPath});
  }
+ /** Every path at a commit (no checkout needed). */
+ async listAll(repoPath,sha){
+  const r=await this.#git(['ls-tree','-r','-l','-z',sha],{cwd:repoPath,maxBytes:8*1024*1024});
+  if(r.code!==0)throw new WorkspaceError('GIT','Không đọc được cây thư mục');
+  return r.stdout.split('\0').filter(Boolean).map(l=>{const m=/^(\d+) (\w+) ([0-9a-f]{40})\s+(\S+)\t(.+)$/.exec(l);return m?{path:m[5],size:m[4]==='-'?0:Number(m[4]),type:m[2]}:null;}).filter(x=>x&&x.type==='blob');
+ }
+ /** git grep over a commit: [{path,line,text}] (binary files skipped, output bounded). */
+ async grepAt(repoPath,sha,pattern,{max=300}={}){
+  const r=await this.#git(['grep','-I','-n','-E','--no-color','-e',pattern,sha,'--'],{cwd:repoPath,maxBytes:2*1024*1024,timeoutMs:60000});
+  if(r.code===1)return [];
+  if(r.code!==0)throw new WorkspaceError('GIT','git grep thất bại');
+  const out=[];
+  for(const l of r.stdout.split('\n')){
+   const m=/^[0-9a-f]{40}:(.+?):(\d+):(.*)$/.exec(l);if(m)out.push({path:m[1],line:Number(m[2]),text:m[3]});
+   if(out.length>=max)break;
+  }
+  return out;
+ }
+ /** Detached worktree (no branch is created) for read-only execution checks. */
+ async createDetached({id,repoPath,baseSha}){
+  if(!SHA.test(baseSha))throw new WorkspaceError('BAD_REF','Cần SHA đầy đủ của commit gốc');
+  const wt=this.path(id);
+  return this.#withLock(resolve(repoPath),async()=>{
+   await this.remove({id,repoPath}).catch(()=>{});
+   await mkdir(this.#dir,{recursive:true,mode:0o700});
+   const r=await this.#git(['worktree','add','--detach',wt,baseSha],{cwd:repoPath});
+   if(r.code!==0)throw new WorkspaceError('WORKTREE','Không tạo được workspace: '+r.stderr.trim().slice(0,200));
+   return wt;
+  });
+ }
+ /** `npm ci --ignore-scripts` then `npm audit --omit=dev --json`; audit exit 1 means "vulnerabilities found", not failure. */
+ async npmAudit(worktree,{timeoutMs=240000,signal}={}){
+  const cli=npmCli();if(!cli)throw new WorkspaceError('NO_NPM','Không tìm thấy npm đi kèm Node');
+  const started=Date.now();
+  const inst=await runProcess(process.execPath,[cli,'ci','--ignore-scripts','--no-audit','--no-fund'],{cwd:worktree,timeoutMs,signal,env:npmInstallEnv()});
+  if(inst.code!==0)return {ok:false,stage:'install',exitCode:inst.code,output:(inst.stdout+inst.stderr).slice(-2000),durationMs:Date.now()-started};
+  const aud=await runProcess(process.execPath,[cli,'audit','--omit=dev','--json'],{cwd:worktree,timeoutMs,signal,env:npmInstallEnv(),maxBytes:512*1024});
+  let counts=null;try{const j=JSON.parse(aud.stdout);counts=j.metadata?.vulnerabilities||null;}catch{/* not JSON */}
+  return {ok:counts!==null,stage:'audit',exitCode:aud.code,counts,output:counts?'':(aud.stdout+aud.stderr).slice(-2000),outputSha256:sha256(aud.stdout),durationMs:Date.now()-started};
+ }
  async listFiles(repoPath,sha,scope){
   const r=await this.#git(['ls-tree','-r','--name-only','-z',sha],{cwd:repoPath,maxBytes:2*1024*1024});
   if(r.code!==0)throw new WorkspaceError('GIT','Không đọc được cây thư mục');
   return r.stdout.split('\0').filter(p=>p&&matchesScope(p,scope));
  }
  /** Reads a file as it is at the approved base commit (not the working tree). */
- async readAtBase(repoPath,sha,rel,maxBytes=40*1024){
-  const r=await this.#git(['show',sha+':'+rel],{cwd:repoPath,maxBytes});
-  return r.code===0?r.stdout:null;
+ async readAtBase(repoPath,sha,rel,maxBytes=40*1024,{head=false}={}){
+  if(typeof rel!=='string'||rel.startsWith('-')||rel.includes('\0'))return null;
+  const r=await this.#git(['show',sha+':'+rel],{cwd:repoPath,maxBytes:8*1024*1024});
+  if(r.code!==0||r.truncated)return null;            // missing, or larger than the 8 MB hard ceiling
+  if(r.stdout.length>maxBytes)return head?r.stdout.slice(0,maxBytes):null;   // head: the beginning of the file, never the tail
+  return r.stdout;
  }
  validateEdits(edits,scope){
   if(!Array.isArray(edits)||edits.length<1||edits.length>MAX_EDITS)throw new WorkspaceError('BAD_EDITS','Số tệp chỉnh sửa phải từ 1 đến '+MAX_EDITS);

@@ -27,6 +27,7 @@ import {Orchestrator} from './orchestrator.js';
 import {createApiV2} from './api-v2.js';
 import {Workspace} from './workspace.js';
 import {CodeChangeService} from './code-change.js';
+import {ReviewService} from './repo-review.js';
 const APP_VERSION=JSON.parse(await readFile(fileURLToPath(new URL('../package.json',import.meta.url)),'utf8')).version;
 const htmlPath=fileURLToPath(new URL('../web/index.html',import.meta.url));
 const port=Number(process.env.PORT||4317);
@@ -49,13 +50,15 @@ const orchestrator=new Orchestrator({dir:stateDir,providers,approvals,onEvent:ev
 await orchestrator.load();
 const codeChanges=new CodeChangeService({dir:stateDir,workspace:new Workspace({dir:join(stateDir,'workspaces')}),providers,approvals,orchestrator,secrets:secretStore});
 await codeChanges.load();
+const reviews=new ReviewService({dir:stateDir,workspace:new Workspace({dir:join(stateDir,'workspaces')}),repos:codeChanges,providers});
+await reviews.load();
 // One-time migration of the legacy .env gateway settings into the secret store (value is never logged).
 // Runs in the background after the port is open: DPAPI goes through PowerShell and must not delay startup.
 async function migrateLegacyGateway(){
  if(providers.connectionCounts().total!==0||process.env.HAK_OMNIROUTE_ENABLED!=='true'||(process.env.HAK_OMNIROUTE_API_KEY||'').length<16)return;
  try{await providers.upsert({type:'openai-compatible',name:'OmniRoute (từ cấu hình cũ)',endpoint:process.env.HAK_OMNIROUTE_URL||'http://127.0.0.1:20128',model:process.env.HAK_OMNIROUTE_MODEL&&process.env.HAK_OMNIROUTE_MODEL!=='auto'?process.env.HAK_OMNIROUTE_MODEL:'auto'},process.env.HAK_OMNIROUTE_API_KEY);}catch{/* invalid legacy values: user configures in Provider Manager */}
 }
-const apiV2=createApiV2({getPort:()=>livePort(),token:operatorToken,providers,orchestrator,codeChanges,secrets:secretStore,dataDir:stateDir,onShutdown:()=>{server.close();setTimeout(()=>process.exit(0),1500).unref();}});
+const apiV2=createApiV2({getPort:()=>livePort(),token:operatorToken,providers,orchestrator,codeChanges,reviews,secrets:secretStore,dataDir:stateDir,onShutdown:()=>{server.close();setTimeout(()=>process.exit(0),1500).unref();}});
 const jobs=new Map();
 let activeJob=false;
 const jobDir=resolve(process.env.HAK_AGENT_OUTPUT_DIR||dataPath(process.env,'agent-results'));

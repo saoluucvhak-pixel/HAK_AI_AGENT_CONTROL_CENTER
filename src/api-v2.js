@@ -17,9 +17,9 @@ export function describeError(error,step){
  const message=known||code==='INVALID'?String(error?.message||'Yêu cầu không hợp lệ').slice(0,400):'Lỗi nội bộ';
  return {error:message,code,step,action:HINTS[code]||(code==='INVALID'?'Kiểm tra dữ liệu nhập và thử lại.':'Xem log cục bộ rồi thử lại.'),retryable:RETRYABLE.has(code)};
 }
-function statusFor(code){return {CONSENT:400,BASE_MOVED:409,NO_GIT:424,NO_NPM:424,NOT_REPO:400,PATH:400,BAD_EDITS:400,PUSH:502,NOT_FOUND:404,NOT_APPROVED:409,BAD_STATE:409,BAD_TRANSITION:409,ALREADY_RUNNING:409,CONFIRM_RERUN:409,TOO_LARGE:413,BAD_JSON:400,CONFIG:400,INVALID:400,AUTH:502,NETWORK:502,TIMEOUT:504,RATE_LIMIT:429,UPSTREAM:502}[code]||500;}
+function statusFor(code){return {CONSENT:400,INVALID:400,BASE_MOVED:409,NO_GIT:424,NO_NPM:424,NOT_REPO:400,PATH:400,BAD_EDITS:400,PUSH:502,NOT_FOUND:404,NOT_APPROVED:409,BAD_STATE:409,BAD_TRANSITION:409,ALREADY_RUNNING:409,CONFIRM_RERUN:409,TOO_LARGE:413,BAD_JSON:400,CONFIG:400,INVALID:400,AUTH:502,NETWORK:502,TIMEOUT:504,RATE_LIMIT:429,UPSTREAM:502}[code]||500;}
 
-export function createApiV2({getPort,token,providers,orchestrator,codeChanges=null,secrets=null,dataDir=null,onShutdown=null}){
+export function createApiV2({getPort,token,providers,orchestrator,codeChanges=null,reviews=null,secrets=null,dataDir=null,onShutdown=null}){
  const allow=createRateLimiter();
  return async function handle(req,res,path){
   if(!path.startsWith('/api/v2/'))return false;
@@ -75,6 +75,12 @@ export function createApiV2({getPort,token,providers,orchestrator,codeChanges=nu
      if(c&&act==='approve-publish'&&req.method==='POST'){step='approve-publish';send(await codeChanges.approvePublish(c,{reason:body.reason}));return true;}
      if(c&&act==='publish'&&req.method==='POST'){step='publish';send(await codeChanges.publish(c));return true;}
     }
+   }
+   if(a==='review'&&reviews){
+    if(!b&&req.method==='GET'){send({reviews:reviews.list()});return true;}
+    if(!b&&req.method==='POST'){step='start-review';send(await reviews.start(body),202);return true;}
+    if(b&&!c&&req.method==='GET'){send(reviews.get(b));return true;}
+    if(b&&c==='report'&&req.method==='GET'){step='report';send({markdown:reviews.report(b)});return true;}
    }
    if(a==='backups'&&dataDir){
     if(req.method==='GET'){send({backups:await listBackups(dataDir)});return true;}
