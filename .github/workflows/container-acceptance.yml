@@ -29,7 +29,7 @@ jobs:
           docker run --rm hak:runtime help | head -5
       - name: Repository test-suite inside the hardened container
         run: |
-          docker run --rm --network none --read-only \
+          docker run --rm --init --network none --read-only \
             --tmpfs /tmp:rw,exec --tmpfs /data:rw,uid=10001 \
             --cap-drop ALL --security-opt no-new-privileges --pids-limit 512 --memory 2g \
             -e HOME=/tmp -e HAK_SANDBOX=container \
@@ -44,7 +44,7 @@ jobs:
           git init -q -b main "$D/clean"
           printf '%s\n' "export const a = 1;" > "$D/clean/a.js"
           git -C "$D/clean" add -A && git -C "$D/clean" -c user.name=t -c user.email=t@t commit -q -m init
-          run() { docker run --rm --network none --read-only --tmpfs /tmp:rw,exec --cap-drop ALL --security-opt no-new-privileges \
+          run() { docker run --rm --init --network none --read-only --tmpfs /tmp:rw,exec --cap-drop ALL --security-opt no-new-privileges \
                     -e HOME=/tmp -v "$1:/work:ro" hak:runtime review --repo /work --fail-on error --json /tmp/r.json; }
           set +e; run "$D/bad"; rc_bad=$?; run "$D/clean"; rc_clean=$?; set -e
           echo "bad=$rc_bad clean=$rc_clean"

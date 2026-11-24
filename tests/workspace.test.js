@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdir,writeFile,readFile,access,symlink} from 'node:fs/promises';
+import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {makeRepo} from './git-helpers.js';
 import {Workspace,verifyCommand} from '../src/workspace.js';
@@ -98,7 +99,8 @@ test('timeout kills the whole process tree, not just the direct child',async()=>
  const pid=Number(res.stdout.trim().split(/\s+/)[0]);
  assert.ok(pid>0);
  let alive=true;
- for(let i=0;i<60&&alive;i++){try{process.kill(pid,0);await new Promise(r=>setTimeout(r,100));}catch{alive=false;}}
+ const zombie=()=>{try{return /^\d+ \(.*\) Z/.test(readFileSync('/proc/'+pid+'/stat','utf8'));}catch{return false;}};
+ for(let i=0;i<60&&alive;i++){try{process.kill(pid,0);if(zombie()){alive=false;break;}await new Promise(r=>setTimeout(r,100));}catch{alive=false;}}
  assert.equal(alive,false,'grandchild must be dead');
 });
 test('push goes only to hak/* branches (local bare remote)',async()=>{

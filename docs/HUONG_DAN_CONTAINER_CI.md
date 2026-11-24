@@ -11,7 +11,7 @@ docker build --target runtime -t hak:runtime .
 Kiểm tra lại một repo (chỉ đọc, không cần mô hình, chạy được không có mạng):
 
 ```bash
-docker run --rm --network none --read-only --tmpfs /tmp:rw,exec --cap-drop ALL --security-opt no-new-privileges \
+docker run --rm --init --network none --read-only --tmpfs /tmp:rw,exec --cap-drop ALL --security-opt no-new-privileges \
   -e HOME=/tmp -v "$PWD/repo-can-kiem-tra:/work:ro" hak:runtime review --repo /work --fail-on error --out /tmp/report.md
 ```
 
@@ -56,7 +56,7 @@ Trong GitHub Actions, hai cổng này là hai *Environment* có "required review
 - `container`: bạn xác nhận container đã chặn mạng (`docker run --network none ...`). Được ghi vào bằng chứng.
 - `off`: không cô lập, **chỉ khi phát triển**.
 
-Khuyến nghị tối thiểu cho mọi lần chạy: người dùng không root (image đã sẵn), `--read-only` + `--tmpfs /tmp`, `--cap-drop ALL`, `--security-opt no-new-privileges`, `--pids-limit`, `--memory`. Bước cài phụ thuộc (`npm ci --ignore-scripts`) cần mạng; muốn chặn mạng khi chạy test thì tách hai container (tạo/cài với mạng, kiểm thử với `--network none`).
+Khuyến nghị tối thiểu cho mọi lần chạy: `--init` (thu dọn tiến trình con mồ côi), người dùng không root (image đã sẵn), `--read-only` + `--tmpfs /tmp`, `--cap-drop ALL`, `--security-opt no-new-privileges`, `--pids-limit`, `--memory`. Bước cài phụ thuộc (`npm ci --ignore-scripts`) cần mạng; muốn chặn mạng khi chạy test thì tách hai container (tạo/cài với mạng, kiểm thử với `--network none`).
 
 **Giới hạn:** chưa có seccomp/AppArmor riêng, giới hạn CPU/đĩa chỉ qua tham số Docker, và mã AI viết vẫn chạy với quyền của người dùng trong container. Đừng gắn thư mục chứa bí mật vào container.
 
