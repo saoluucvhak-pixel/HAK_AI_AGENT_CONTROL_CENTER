@@ -90,3 +90,15 @@ test('fetchGithubSkillsIndex reads cloudflare/security-audit-skill skills/securi
  assert.equal(idx[0].name,'security-audit');
  assert.equal(idx[0].basePath,'skills');
 });
+
+test('fetchGithubSkillsIndex reads vercel-labs/agent-browser skills/agent-browser',async()=>{
+ const mockFetch=async(url)=>{
+  if(url.endsWith('/repos/vercel-labs/agent-browser/contents/skills')){
+   return {ok:true,status:200,json:async()=>[{type:'dir',name:'agent-browser',path:'skills/agent-browser'}]};
+  }
+  return {ok:false,status:404};
+ };
+ const idx=await fetchGithubSkillsIndex('vercel-labs/agent-browser',{fetchImpl:mockFetch});
+ assert.equal(idx[0].name,'agent-browser');
+ assert.equal(idx[0].basePath,'skills');
+});

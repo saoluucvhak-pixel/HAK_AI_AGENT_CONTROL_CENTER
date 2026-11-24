@@ -8,12 +8,12 @@ const SKILL_NAME=/^[a-z0-9][a-z0-9-]{0,79}$/;
 
 const ROLE_SKILL_HINTS={
  architecture:['hak-archify-architecture','archify','security-audit','hak-code-auditor'],
- ui:['hak-ui-designer','hak-ui-ux-pro-max','hak-vercel-web-design','hak-unslop-design'],
+ ui:['agent-browser','hak-ui-designer','hak-ui-ux-pro-max','hak-vercel-web-design','hak-unslop-design'],
  backend:['fix-finding','security-diff-scan','hak-code-auditor','hak-data-integrity','hak-migration-manager'],
  data:['hak-parent-child-data-model','hak-data-integrity','hak-smart-filter'],
  security:['security-audit','security-scan','triage-finding','check-skills','hak-electron-security','hak-code-auditor'],
- testing:['triage-finding','verify-fix','security-audit','hak-code-auditor','hak-payroll-validator'],
- quality:['verify-fix','security-diff-scan','security-audit','hak-code-auditor','hak-unslop-design'],
+ testing:['agent-browser','triage-finding','verify-fix','security-audit','hak-code-auditor','hak-payroll-validator'],
+ quality:['agent-browser','verify-fix','security-diff-scan','security-audit','hak-code-auditor','hak-unslop-design'],
  release:['hak-release-builder'],
  ocr:['hak-document-markdown','hak-accounting-report']
 };
