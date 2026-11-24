@@ -26,7 +26,17 @@ Trạng thái phát hành: **RELEASE CANDIDATE. Chưa đủ điều kiện stabl
 | TC16 | Hiệu năng | NOT_RUN | backlog B-07 |
 | TC17 | Trải nghiệm trên Windows | KHÔNG ÁP DỤNG | Quyết định ngày 24/11/2026: công cụ chạy trong container/CI, không chạy trên Windows; gói bộ cài đã gỡ (xem docs/KE_HOACH_HOAN_THIEN.md) |
 
-## Release gates (Gate 6 – Windows: không áp dụng)
-1 Source: chưa đủ (chưa quét bí mật/phụ thuộc độc lập; CI xanh trên `208b37f`) · 2 Application: đạt ở mức mô phỏng · 3 Real AI: **chưa đạt** · 4 Multi-Agent: đạt mức mô phỏng · 5 GitHub: **chưa đạt** · 6 Windows: có SETUP.exe + checksum + cài/nâng cấp/gỡ đạt trên runner CI; **chưa ký mã, chưa thử trên Windows sạch của người dùng (TC17)** · 7 Acceptance: **chưa có xác nhận của người có thẩm quyền**.
+## Gói K — container/CI (PR #147, commit `53fbdbf`)
+| Hạng mục | Kết quả | Bằng chứng |
+|---|---|---|
+| Test toàn bộ trên ubuntu-24.04 / Node 22 | PASS (302/302) | job `node (ubuntu-24.04, 22)` run 45454890089 |
+| Dựng image `runtime` + `acceptance`, người dùng không root (uid 10001) | PASS | job `container` run 45454890066 |
+| Test trong container làm cứng (`--network none --read-only --cap-drop ALL --init`, `HAK_SANDBOX=container`) | PASS | cùng job |
+| `review` repo mount chỉ đọc: mã thoát 1 (có lỗi) / 0 (sạch) | PASS | cùng job |
+| `write` không có provider → mã 2, không giả lập | PASS | cùng job |
+| `write`/`publish` với mô hình thật, PR do công cụ mở bằng token thật, `examples/ci/*` chạy đầu-cuối, image đã publish | **NOT_RUN / BLOCKED** (cần khóa và token của bạn) | — |
 
-Artifact: job `windows` của workflow *Windows release* (run 45310148992) tải lên `HAK_AI_AGENT_SETUP_0.2.0-rc.1.exe`, `HAK_AI_AGENT_PORTABLE_0.2.0-rc.1.zip`, `SHA256SUMS.txt`. SHA-256 bộ cài (từ log CI): `d87a98cb7426978243ba948e83b313e236a2f74f3887e179b4ed98ccf016bcaa`.
+Lưu ý: sandbox `netns` cần `unshare -rn`, runner GitHub không cho; CI dùng `HAK_SANDBOX=off` (test đơn vị) hoặc `container` (trong Docker `--network none`). Chưa có seccomp/AppArmor riêng.
+
+## Release gates (Gate 6 – Windows: không áp dụng; thay bằng container/CI)
+1 Source: chưa đủ (chưa quét bí mật/phụ thuộc độc lập; CI xanh trên `53fbdbf`) · 2 Application: đạt ở mức mô phỏng · 3 Real AI: **chưa đạt** · 4 Multi-Agent: đạt mức mô phỏng · 5 GitHub: **chưa đạt** · 6 Container/CI: đạt (xem bảng gói K) · 7 Acceptance: **chưa có xác nhận của người có thẩm quyền**.
