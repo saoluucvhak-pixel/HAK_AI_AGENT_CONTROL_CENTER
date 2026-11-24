@@ -23,7 +23,7 @@ PR #126 (HAK_TEST_AI_WINDOWS) đang mở, chưa merge, không xung đột với 
 | HAK AI Skills registry / Code Quality gate / Claude-Mem theo dự án | NOT_IMPLEMENTED (tích hợp) | module Claude-Mem bridge cũ chỉ là cầu "reviewed-export-only" |
 | OCR, Orca | PARTIALLY_IMPLEMENTED | probe kết nối; không tích hợp vào Work Order |
 | Kết nối Claude/Gemini thật | BLOCKED_BY_EXTERNAL_DEPENDENCY | cần API key của người dùng |
-| Bộ cài Windows (Inno Setup, per-user, runtime Node kèm) | IMPLEMENTED_AND_VERIFIED (runner CI) | cài/nâng cấp/gỡ 21/21 trên `6a74382`; chưa thử trên Windows sạch của người dùng |
+| Bộ cài Windows (Inno Setup, per-user, runtime Node kèm) | IMPLEMENTED_AND_VERIFIED (runner CI) | cài/nâng cấp/gỡ 21/21 trên `208b37f`; chưa thử trên Windows sạch của người dùng |
 | Ký mã (code signing) | NOT_IMPLEMENTED | bộ cài **chưa ký** |
 | Sao lưu/phục hồi dữ liệu v2 | PARTIALLY_IMPLEMENTED | `src/data-backup.js` + test; chưa có UI phục hồi |
 | SQLite / truy vấn lịch sử lớn | NOT_IMPLEMENTED | JSON atomic + `.bak` đủ cho quy mô hiện tại; chưa đo |
