@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {localAcceptance} from './local-acceptance.js';
 
-const REQUIRED=['windows-desktop','ruflo-live','claude-mem-live','omniroute-live','archify-live','ocr-live','security-review'];
+const REQUIRED=['windows-desktop','ruflo-live','claude-mem-live','archify-live','ocr-live','security-review'];
 export function createAcceptancePacket({baseline,reviewedEvidence=[]}={}){
  if(!baseline||baseline.kind!=='hak-local-acceptance-diagnostics'||baseline.readyForProduction!==false)throw new Error('Invalid local baseline');
  if(!Array.isArray(reviewedEvidence)||reviewedEvidence.length>REQUIRED.length)throw new Error('Invalid reviewed evidence');

@@ -5,7 +5,7 @@ const baseline={kind:'hak-local-acceptance-diagnostics',platform:'win32',nodeMaj
 test('packet is deterministic, redacted and fail-closed',()=>{
  const a=createAcceptancePacket({baseline}),b=createAcceptancePacket({baseline});
  assert.deepEqual(a,b);assert.match(a.sha256,/^[0-9a-f]{64}$/);
- assert.equal(a.required.length,7);assert.equal(a.readyForProduction,false);
+ assert.equal(a.required.length,6);assert.equal(a.readyForProduction,false);
  assert.ok(a.required.every(x=>x.status==='missing'));
 });
 test('refuses unverified claims of successful external gates',()=>{

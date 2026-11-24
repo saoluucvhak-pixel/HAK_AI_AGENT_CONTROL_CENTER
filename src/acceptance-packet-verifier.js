@@ -1,5 +1,5 @@
 import {createHash,timingSafeEqual} from 'node:crypto';
-const REQUIRED=['windows-desktop','ruflo-live','claude-mem-live','omniroute-live','archify-live','ocr-live','security-review'];
+const REQUIRED=['windows-desktop','ruflo-live','claude-mem-live','archify-live','ocr-live','security-review'];
 export function verifyAcceptancePacket(packet){
  if(!packet||typeof packet!=='object'||Array.isArray(packet)||packet.kind!=='hak-acceptance-evidence-packet'||packet.schemaVersion!==1)throw new Error('Invalid packet');
  if(typeof packet.sha256!=='string'||!/^[a-f0-9]{64}$/.test(packet.sha256))throw new Error('Invalid digest');

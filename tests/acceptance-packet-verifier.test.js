@@ -9,7 +9,7 @@ test('valid packet integrity never proves execution',()=>{
  assert.equal(r.digestMatches,true);
  assert.equal(r.externalExecutionVerified,false);
  assert.equal(r.readyForProduction,false);
- assert.equal(r.missingOrPending.length,7);
+ assert.equal(r.missingOrPending.length,6);
 });
 test('tampered packet fails digest',()=>{
  const p=createAcceptancePacket({baseline});
