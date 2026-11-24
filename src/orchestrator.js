@@ -8,6 +8,8 @@ import {validateGithubPatchProposal} from './github-patch-proposal.js';
 import {githubPatchPreflight} from './github-patch-preflight.js';
 import {executeGithubPatchProposal} from './github-patch-executor.js';
 import {recommendSkillsForMission,loadSkills,buildSkillObservations} from './skill-resolver.js';
+import {assertCodePolicy} from './code-policy-guard.js';
+import {runSelfHealingCodeLoop} from './auto-code-generator.js';
 
 const sha256=text=>createHash('sha256').update(text,'utf8').digest('hex');
 
@@ -26,13 +28,21 @@ export async function runOrchestratedMission(mission,{
  maxSourceBytes=100000
 }={}){
  if(!mission||typeof mission!=='object'||Array.isArray(mission))throw new Error('Invalid mission specification');
- if(!Array.isArray(mission.changes)||mission.changes.length<1||mission.changes.length>maxFiles)
-  throw new Error('Mission requires 1 to '+maxFiles+' file changes');
  if(typeof verifyChanges!=='function')throw new Error('Executable verification callback required before patching');
 
+ const isAutonomous=mission.autonomous===true||!Array.isArray(mission.changes);
+ let filePaths;
+ if(isAutonomous){
+  filePaths=Array.isArray(mission.targetFiles)?mission.targetFiles:(Array.isArray(mission.filePaths)?mission.filePaths:[]);
+  if(filePaths.length<1||filePaths.length>maxFiles)
+   throw new Error('Autonomous mission requires 1 to '+maxFiles+' targetFiles');
+ }else{
+  if(!Array.isArray(mission.changes)||mission.changes.length<1||mission.changes.length>maxFiles)
+   throw new Error('Mission requires 1 to '+maxFiles+' file changes');
+  filePaths=mission.changes.map(c=>c?.path).filter(Boolean);
+ }
  const allowlistedRepos=[mission.targetRepo,...(Array.isArray(mission.allowlistedRepos)?mission.allowlistedRepos:[])];
  const target=parseRepoTarget(mission.targetRepo,{owner,allowlistedRepos});
- const filePaths=mission.changes.map(c=>c?.path).filter(Boolean);
  const recommended=recommendSkillsForMission({type:mission.type||'bug',description:mission.description||'',filePaths});
  const requestedSkills=Array.isArray(mission.skills)&&mission.skills.length>0
   ?[...new Set([...mission.skills,...recommended])].slice(0,12)
@@ -98,6 +108,54 @@ export async function runOrchestratedMission(mission,{
   throw err;
  }
 
+ let verificationResult;
+ let selfHealingHistory=[];
+ if(isAutonomous){
+  await emit('generate','coder','queued');
+  await emit('generate','coder','running');
+  const healingResult=await runSelfHealingCodeLoop({
+   workOrder:order,
+   inspectedFiles:inspection.files,
+   loadedSkills,
+   verifyChanges:async(patch)=>{
+    assertCodePolicy(patch.changes,{maxFiles,maxTotalBytes:maxPatchBytes});
+    const candidateResolved=patch.changes.map(change=>{
+     const inspected=inspection.files.find(f=>f.path===change.path);
+     return {
+      path:change.path,
+      expectedBlobSha:change.createNew===true?null:(inspected?.blobSha||null),
+      createNew:change.createNew===true,
+      newContent:change.newContent
+     };
+    });
+    return verifyChanges({
+     workOrder:order,
+     target,
+     baseSha,
+     skills:loadedSkills,
+     changes:candidateResolved
+    });
+   },
+   maxAttempts:mission.maxAttempts||3,
+   modelRunner:mission.modelRunner,
+   onAttempt:async({attempt,stage})=>{
+    const statusMap={generating:'running',verifying:'running',passed:'passed',refining:'queued','generation-failed':'failed'};
+    await emit('self-heal-'+attempt,'coder',statusMap[stage]||'running');
+   }
+  });
+  if(!healingResult.success){
+   await emit('generate','coder','failed');
+   throw new Error('Autonomous self-healing code generation failed: '+healingResult.error);
+  }
+  await emit('generate','coder','passed');
+  mission.changes=healingResult.patch.changes;
+  if(healingResult.patch.rationale)mission.rationale=healingResult.patch.rationale;
+  selfHealingHistory=healingResult.history;
+  verificationResult=healingResult.verification;
+ }else{
+  assertCodePolicy(mission.changes,{maxFiles,maxTotalBytes:maxPatchBytes});
+ }
+
  const resolvedChanges=mission.changes.map(change=>{
   const inspected=inspection.files.find(f=>f.path===change.path);
   if(change.createNew===true){
@@ -111,24 +169,25 @@ export async function runOrchestratedMission(mission,{
   return {path:change.path,expectedBlobSha:inspected.blobSha,newContent:change.newContent};
  });
 
- // Phase 3: Mandatory executable test/quality verification BEFORE preflight or GitHub write
- await emit('verify','testing','queued');
- await emit('verify','testing','running');
- let verificationResult;
- try{
-  verificationResult=await verifyChanges({
-   workOrder:order,
-   target,
-   baseSha,
-   skills:loadedSkills,
-   changes:resolvedChanges
-  });
-  if(!verificationResult||verificationResult.passed!==true)
-   throw new Error('Verification suite did not pass: '+(verificationResult?.summary||'rejected'));
-  await emit('verify','testing','passed');
- }catch(err){
-  await emit('verify','testing','failed');
-  throw err;
+ if(!isAutonomous){
+  // Phase 3: Mandatory executable test/quality verification BEFORE preflight or GitHub write
+  await emit('verify','testing','queued');
+  await emit('verify','testing','running');
+  try{
+   verificationResult=await verifyChanges({
+    workOrder:order,
+    target,
+    baseSha,
+    skills:loadedSkills,
+    changes:resolvedChanges
+   });
+   if(!verificationResult||verificationResult.passed!==true)
+    throw new Error('Verification suite did not pass: '+(verificationResult?.summary||'rejected'));
+   await emit('verify','testing','passed');
+  }catch(err){
+   await emit('verify','testing','failed');
+   throw err;
+  }
  }
 
  // Phase 4: Proposal validation & GitHub preflight
@@ -220,6 +279,8 @@ export async function runOrchestratedMission(mission,{
    requiresHumanReview:true,
    readyToMerge:false
   }:null,
+  codePolicy:{passed:true,enforced:true},
+  selfHealing:{autonomous:isAutonomous,attempts:selfHealingHistory.length||1,history:selfHealingHistory},
   readyToMerge:false,
   readyForProduction:false
  };
