@@ -158,7 +158,7 @@ async function loadCode(){
  try{
   const [{repos},{changes},{workOrders}]=await Promise.all([api('/code/repos'),api('/code/changes'),api('/work-orders')]);
   const rl=$('repos-list');rl.replaceChildren();
-  for(const r of repos){const a=el('article');a.append(el('h3',r.name),el('p',r.path+' · nhánh gốc '+r.defaultBranch+(r.githubRepo?' · GitHub '+r.githubRepo:' · chỉ cục bộ')));rl.append(a);}
+  for(const r of repos){const a=el('article');a.append(el('h3',r.name),el('p',r.path+' · nhánh gốc '+r.defaultBranch+' · kiểm thử '+(r.defaultVerify||'node-test')+(r.githubRepo?' · GitHub '+r.githubRepo:' · chỉ cục bộ')));rl.append(a);}
   const so=$('cc-order');const keepO=so.value;so.replaceChildren();for(const w of workOrders.filter(x=>x.status==='COMPLETED'))so.append(new Option(w.title+' ('+w.id+')',w.id));if(keepO)so.value=keepO;
   const sr=$('cc-repo');const keepR=sr.value;sr.replaceChildren();for(const r of repos)sr.append(new Option(r.name,r.id));if(keepR)sr.value=keepR;
   const box=$('code-changes');box.replaceChildren();
@@ -191,14 +191,14 @@ async function ccCard(id){
  card.append(row,msg);return card;
 }
 $('repo-form').addEventListener('submit',async ev=>{ev.preventDefault();
- try{await api('/code/repos','POST',{name:$('r-name').value,path:$('r-path').value,githubRepo:$('r-gh').value||null,defaultBranch:$('r-branch').value||'main'});say('cc-message','Đã đăng ký repository.');$('repo-form').reset();$('r-branch').value='main';await loadCode();}
+ try{await api('/code/repos','POST',{name:$('r-name').value,path:$('r-path').value,githubRepo:$('r-gh').value||null,defaultBranch:$('r-branch').value||'main',defaultVerify:$('r-verify').value});say('cc-message','Đã đăng ký repository.');$('repo-form').reset();$('r-branch').value='main';await loadCode();}
  catch(e){say('cc-message','Không đăng ký được: '+explain(e),true);}});
 $('token-form').addEventListener('submit',async ev=>{ev.preventDefault();
  try{await api('/code/github-token','PUT',{token:$('gh-token').value});$('gh-token').value='';say('cc-message','Đã lưu token trong kho bí mật.');}
  catch(e){say('cc-message','Không lưu được token: '+explain(e),true);}});
 $('cc-form').addEventListener('submit',async ev=>{ev.preventDefault();
  const scope=$('cc-scope').value.split('\n').map(x=>x.trim()).filter(Boolean);
- try{await api('/code/changes','POST',{orderId:$('cc-order').value,repoId:$('cc-repo').value,scope,verifyCommand:$('cc-verify').value,maxRepairs:Number($('cc-repairs').value),consentExecuteCode:$('cc-consent').checked});say('cc-message','Đã tạo thay đổi mã. Xem phạm vi rồi phê duyệt để chạy.');await loadCode();}
+ try{await api('/code/changes','POST',{orderId:$('cc-order').value,repoId:$('cc-repo').value,scope,verifyCommand:$('cc-verify').value||undefined,maxRepairs:Number($('cc-repairs').value),consentExecuteCode:$('cc-consent').checked});say('cc-message','Đã tạo thay đổi mã. Xem phạm vi rồi phê duyệt để chạy.');await loadCode();}
  catch(e){say('cc-message','Không tạo được: '+explain(e),true);}});
 let ccTimer=null;
 async function ccTick(){const active=await loadCode();clearTimeout(ccTimer);ccTimer=setTimeout(ccTick,active?2000:20000);}

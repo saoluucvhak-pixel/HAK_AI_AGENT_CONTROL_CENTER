@@ -1,4 +1,4 @@
-import {mkdir,writeFile,rm} from 'node:fs/promises';
+import {mkdir,writeFile,rm,stat,readFile} from 'node:fs/promises';
 import {join,dirname,resolve} from 'node:path';
 import {existsSync,realpathSync} from 'node:fs';
 import {createHash} from 'node:crypto';
@@ -6,7 +6,7 @@ import {runGit,runProcess,scrubbedEnv,npmInstallEnv} from './safe-process.js';
 import {validateEditPath,assertInsideRoot,matchesScope,PathError} from './code-paths.js';
 
 const SHA=/^[a-f0-9]{40}$/;
-const MAX_EDITS=20,MAX_FILE=100*1024,MAX_TOTAL=300*1024;
+const MAX_EDITS=20,MAX_FILE=100*1024,MAX_TOTAL=300*1024,MAX_FULL_EXISTING=30*1024,MAX_REPLACE=30,MAX_EDITABLE=2*1024*1024;
 export class WorkspaceError extends Error{constructor(code,message){super(message);this.code=code;}}
 function canonical(p){
  let real=p;try{real=realpathSync.native(p);}catch{/* fall back to the raw path */}
@@ -99,23 +99,60 @@ export class Workspace{
   if(!Array.isArray(edits)||edits.length<1||edits.length>MAX_EDITS)throw new WorkspaceError('BAD_EDITS','Số tệp chỉnh sửa phải từ 1 đến '+MAX_EDITS);
   const seen=new Set();let total=0;
   return edits.map(e=>{
-   if(!e||typeof e!=='object'||typeof e.content!=='string')throw new WorkspaceError('BAD_EDITS','Chỉnh sửa không hợp lệ');
+   if(!e||typeof e!=='object')throw new WorkspaceError('BAD_EDITS','Chỉnh sửa không hợp lệ');
    const path=validateEditPath(e.path,scope);
    if(seen.has(path.toLowerCase()))throw new WorkspaceError('BAD_EDITS','Trùng đường dẫn: '+path);
    seen.add(path.toLowerCase());
-   const bytes=Buffer.byteLength(e.content,'utf8');total+=bytes;
-   if(bytes>MAX_FILE||total>MAX_TOTAL||e.content.includes('\0'))throw new WorkspaceError('BAD_EDITS','Nội dung quá lớn hoặc chứa byte NUL');
-   return {path,content:e.content};
+   if(typeof e.content==='string'){
+    const bytes=Buffer.byteLength(e.content,'utf8');total+=bytes;
+    if(bytes>MAX_FILE||total>MAX_TOTAL||e.content.includes('\0'))throw new WorkspaceError('BAD_EDITS','Nội dung quá lớn hoặc chứa byte NUL');
+    return {path,content:e.content};
+   }
+   if(Array.isArray(e.replace)&&e.replace.length>=1&&e.replace.length<=MAX_REPLACE){
+    const replace=e.replace.map(r=>{
+     if(!r||typeof r.find!=='string'||!r.find||typeof r.with!=='string'||r.find.length>20000||r.with.length>50000||r.find.includes('\0')||r.with.includes('\0'))throw new WorkspaceError('BAD_EDITS','Khối thay thế không hợp lệ trong '+path);
+     total+=Buffer.byteLength(r.with,'utf8');
+     return {find:r.find,with:r.with};
+    });
+    if(total>MAX_TOTAL)throw new WorkspaceError('BAD_EDITS','Tổng nội dung thay thế quá lớn');
+    return {path,replace};
+   }
+   throw new WorkspaceError('BAD_EDITS','Mỗi chỉnh sửa cần "content" (tệp mới/nhỏ) hoặc "replace" (1–'+MAX_REPLACE+' khối {find,with}): '+path);
   });
  }
+ /** Exact-anchor replacement: every `find` must occur exactly once. CRLF files accept LF anchors. */
+ static applyReplacements(text,replace,path){
+  const crlf=text.includes('\r\n');
+  let out=text;
+  for(const [i,r] of replace.entries()){
+   let find=r.find,w=r.with;
+   if(crlf&&!find.includes('\r\n')){find=find.replace(/\n/g,'\r\n');w=w.replace(/\r?\n/g,'\r\n');}
+   const parts=out.split(find);
+   if(parts.length===1)throw new WorkspaceError('ANCHOR','Không tìm thấy đoạn cần thay #'+(i+1)+' trong '+path+' (phải khớp chính xác từng ký tự): "'+r.find.slice(0,60).replace(/\n/g,'\\n')+'"');
+   if(parts.length>2)throw new WorkspaceError('ANCHOR','Đoạn cần thay #'+(i+1)+' trong '+path+' khớp '+(parts.length-1)+' chỗ; hãy thêm ngữ cảnh để chỉ khớp đúng một chỗ');
+   out=parts.join(w);
+  }
+  return out;
+ }
+ /** Two-phase: compute every new file in memory first, then write; a failing anchor leaves the worktree untouched. */
  async applyEdits(worktree,edits,scope){
   const checked=this.validateEdits(edits,scope);
+  const plan=[];
   for(const e of checked){
    const target=await assertInsideRoot(worktree,e.path);
-   await mkdir(dirname(target),{recursive:true});
-   await writeFile(target,e.content,'utf8');
+   let existing=null;
+   try{const st=await stat(target);if(!st.isFile())throw new WorkspaceError('BAD_EDITS','Không phải tệp thường: '+e.path);if(st.size>MAX_EDITABLE)throw new WorkspaceError('BAD_EDITS','Tệp quá lớn để chỉnh sửa: '+e.path);existing=await readFile(target,'utf8');}
+   catch(err){if(err.code!=='ENOENT')throw err;}
+   if(e.replace){
+    if(existing===null)throw new WorkspaceError('BAD_EDITS','Không thể "replace" trên tệp chưa tồn tại: '+e.path);
+    plan.push({path:e.path,target,mode:'replace',n:e.replace.length,content:Workspace.applyReplacements(existing,e.replace,e.path)});
+   }else{
+    if(existing!==null&&Buffer.byteLength(existing,'utf8')>MAX_FULL_EXISTING)throw new WorkspaceError('BAD_EDITS','Tệp '+e.path+' lớn hơn '+(MAX_FULL_EXISTING/1024)+' KB: dùng "replace" thay vì ghi lại toàn bộ');
+    plan.push({path:e.path,target,mode:'content',n:1,content:e.content});
+   }
   }
-  return checked.map(e=>({path:e.path,sha256:sha256(e.content),bytes:Buffer.byteLength(e.content)}));
+  for(const p of plan){await mkdir(dirname(p.target),{recursive:true});await writeFile(p.target,p.content,'utf8');}
+  return plan.map(p=>({path:p.path,mode:p.mode,changes:p.n,sha256:sha256(p.content),bytes:Buffer.byteLength(p.content)}));
  }
  async commit(worktree,message,paths){
   const add=await this.#git(['add','--',...paths],{cwd:worktree});

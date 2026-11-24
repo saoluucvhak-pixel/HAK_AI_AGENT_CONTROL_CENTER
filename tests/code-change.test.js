@@ -143,7 +143,7 @@ test('GitHub-linked repo: draft PR is opened with the stored token, never merged
  try{
   const bare=join(x.r.dir,'origin.git');
   await runGit(['init','-q','--bare',bare],{cwd:x.r.dir});await x.r.g('remote','add','origin',bare);
-  const linked=await x.svc.registerRepo({name:'linked',path:x.r.repo,githubRepo:'HAK_AI_SKILLS'});
+  const linked=await x.svc.registerRepo({name:'linked',path:x.r.repo,githubRepo:'saoluucvhak-pixel/HAK_AI_SKILLS'});
   await x.secrets.set('github:token','ghp_secret_token_value_123456');
   const cc=await x.svc.create({orderId:x.wo.id,repoId:linked.id,scope:SCOPE,consentExecuteCode:true});
   await run(x,cc);await x.svc.approvePublish(cc.id);
@@ -153,7 +153,8 @@ test('GitHub-linked repo: draft PR is opened with the stored token, never merged
   assert.equal(call.url,'https://api.github.com/repos/saoluucvhak-pixel/HAK_AI_SKILLS/pulls');
   const body=JSON.parse(call.init.body);assert.equal(body.draft,true);assert.equal(body.base,'main');assert.match(body.head,/^hak\//);
   assert.ok(!JSON.stringify(done).includes('ghp_secret_token_value_123456'));
-  await assert.rejects(()=>x.svc.registerRepo({name:'bad',path:x.r.repo,githubRepo:'NOT_ALLOWED'}),/danh sách cho phép/);
+  await assert.rejects(()=>x.svc.registerRepo({name:'bad',path:x.r.repo,githubRepo:'NOT_ALLOWED'}),/owner\/name/);
+  await assert.rejects(()=>x.svc.registerRepo({name:'bad2',path:x.r.repo,githubRepo:'a/b/c'}),/owner\/name/);
  }finally{await x.cleanup();}
 });
 test('restart mid-run → INTERRUPTED; rerun needs explicit confirmation and re-verifies approval',async()=>{
@@ -175,5 +176,38 @@ test('cancel aborts the run and marks CANCELLED',async()=>{
   for(let i=0;i<100&&x.prompts.length<1;i++)await new Promise(r=>setTimeout(r,10));
   const done=await x.svc.cancel(cc.id);
   assert.equal(done.status,'CANCELLED');
+ }finally{await x.cleanup();}
+});
+
+test('any owner/name can be registered; the PR goes to that exact repository; default verify profile applies',async()=>{
+ const x=await setup({codeHandler:()=>good()});
+ try{
+  const bare=join(x.r.dir,'origin.git');
+  await runGit(['init','-q','--bare',bare],{cwd:x.r.dir});await x.r.g('remote','add','origin',bare);
+  const other=await x.svc.registerRepo({name:'other-owner',path:x.r.repo,githubRepo:'some-org/some.repo-1',defaultVerify:'node-test'});
+  assert.equal(other.defaultVerify,'node-test');
+  await assert.rejects(()=>x.svc.registerRepo({name:'v',path:x.r.repo,defaultVerify:'rm -rf'}),/Lệnh kiểm thử/);
+  await x.secrets.set('github:token','ghp_secret_token_value_123456');
+  const cc=await x.svc.create({orderId:x.wo.id,repoId:other.id,scope:SCOPE,consentExecuteCode:true});
+  assert.equal(cc.verifyCommand,'node-test','verify command defaults from the repository profile');
+  await run(x,cc);await x.svc.approvePublish(cc.id);await x.svc.publish(cc.id);
+  assert.equal(x.fetchCalls[0].url,'https://api.github.com/repos/some-org/some.repo-1/pulls');
+ }finally{await x.cleanup();}
+});
+test('replace edits on a large existing file (full rewrite would be refused); repair loop feeds back anchor errors',async()=>{
+ const big='// '+'x'.repeat(40*1024)+'\nexport const marker=1;\n';
+ const x=await setup({codeHandler:n=>n===0
+  ?JSON.stringify({edits:[{path:'src/big.js',replace:[{find:'xxxx',with:'yyyy'}]}]}) // ambiguous anchor: matches thousands of places
+  :JSON.stringify({edits:[{path:'src/big.js',replace:[{find:'export const marker=1;',with:'export const marker=2;'}]}]})});
+ try{
+  await writeFile(join(x.r.repo,'src','big.js'),big);await x.r.g('add','-A');await x.r.g('commit','-q','-m','big');
+  const repoNow=await x.svc.registerRepo({name:'big',path:x.r.repo});
+  const cc=await x.svc.create({orderId:x.wo.id,repoId:repoNow.id,scope:['src/big.js','test/**'],consentExecuteCode:true});
+  const done=await run(x,cc);
+  assert.equal(done.status,'VERIFIED',JSON.stringify(done.error));
+  const content=(await x.r.g('show',done.headSha+':src/big.js')).stdout;
+  assert.match(content,/marker=2/);assert.ok(content.length>40*1024,'the rest of the large file is preserved');
+  assert.equal(done.attempts.length,2);assert.match(done.attempts[0].error,/khớp \d+ chỗ/);
+  assert.match(x.prompts[1],/khớp \d+ chỗ/,'the anchor error is fed back to the Agent');
  }finally{await x.cleanup();}
 });

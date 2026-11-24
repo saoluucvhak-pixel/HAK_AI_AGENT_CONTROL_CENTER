@@ -44,7 +44,7 @@ PR #126 (HAK_TEST_AI_WINDOWS) đang mở, chưa merge, không xung đột với 
 |---|---|---|---|
 | B-01 | P0 | Kiểm thử Claude thật + Gemini thật (TC03/TC04) | Khóa của người dùng; công việc không nhạy cảm; lưu bằng chứng |
 | B-02 | P0 | Chạy `release-windows.yml` xanh trên commit phát hành; kiểm thử cài trên Windows sạch (TC01/13/14, TC17 bởi người) | artifact + `INSTALLER_TEST_RESULTS.json` |
-| B-03 | P1 | Còn lại: chạy trên repo GitHub thật được cấp quyền, nối phản hồi GitHub CI vào vòng sửa (TC07/08). Phần cục bộ đã xong | PR thật trên repo thử nghiệm; CI đỏ → Agent sửa → CI xanh |
+| B-03 | P1 | Còn lại: PR do chính ứng dụng mở trên repo thật (cần token GitHub), nối phản hồi GitHub CI vào vòng sửa (TC08). Đã xong ở gói B: repo owner/name tùy ý, sửa bằng khối thay thế, hồ sơ kiểm thử theo repo | PR thật trên repo thử nghiệm; CI đỏ → Agent sửa → CI xanh |
 | B-04 | P1 | Hoàn thiện phục hồi trên UI và kiểm thử phục hồi trên máy độc lập (đã có sao lưu/xác minh/phục hồi dòng lệnh, TC12) | khôi phục độc lập, đối chiếu checksum |
 | B-05 | P1 | Tích hợp HAK Code Quality / Skills qua CLI có phiên bản | gate thật, không dùng kết quả AI tự đánh giá |
 | B-06 | P1 | Ký mã bộ cài | chứng thư do người có thẩm quyền cấp |

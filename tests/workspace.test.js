@@ -146,3 +146,32 @@ test('npm-ci-test: install step uses --ignore-scripts and proxy env; the test st
  assert.equal(scrubbedEnv({},base).HTTPS_PROXY,undefined);
  assert.throws(()=>verifySteps('npm ci; curl x'),/danh sách cho phép/);
 });
+
+test('replace blocks: exact unique anchors; missing/ambiguous anchors are refused and nothing is written (two-phase)',async()=>{
+ const r=await makeRepo({'src/a.js':'const a=1;\nconst b=1;\nconst b=1;\n','src/c.js':'export const c=1;\n'});
+ try{
+  const ws=new Workspace({dir:join(r.dir,'ws')});
+  const wt=await ws.create({id:'r1',repoPath:r.repo,baseSha:r.sha,branch:'hak/test-replace'});
+  await assert.rejects(()=>ws.applyEdits(wt,[{path:'src/c.js',replace:[{find:'export const c=1;',with:'export const c=2;'}]},{path:'src/a.js',replace:[{find:'const b=1;',with:'const b=2;'}]}],SCOPE),e=>e.code==='ANCHOR'&&/2 chỗ/.test(e.message));
+  assert.equal(await readFile(join(wt,'src/c.js'),'utf8'),'export const c=1;\n','an earlier valid edit must not be half-applied');
+  await assert.rejects(()=>ws.applyEdits(wt,[{path:'src/a.js',replace:[{find:'const zzz=9;',with:'x'}]}],SCOPE),e=>e.code==='ANCHOR'&&/Không tìm thấy/.test(e.message));
+  await assert.rejects(()=>ws.applyEdits(wt,[{path:'src/missing.js',replace:[{find:'a',with:'b'}]}],SCOPE),/chưa tồn tại/);
+  const ok=await ws.applyEdits(wt,[{path:'src/a.js',replace:[{find:'const a=1;',with:'const a=5;'},{find:'const b=1;\nconst b=1;',with:'const b=2;'}]}],SCOPE);
+  assert.equal(ok[0].mode,'replace');assert.equal(ok[0].changes,2);
+  assert.equal(await readFile(join(wt,'src/a.js'),'utf8'),'const a=5;\nconst b=2;\n');
+  assert.throws(()=>ws.validateEdits([{path:'src/a.js',replace:[]}],SCOPE),/content|replace/);
+  assert.throws(()=>ws.validateEdits([{path:'src/a.js'}],SCOPE),/content/);
+ }finally{await r.cleanup();}
+});
+test('replace keeps CRLF files consistent when the model sends LF anchors; full rewrite of a big existing file is refused',async()=>{
+ const r=await makeRepo({'src/w.js':'one\r\ntwo\r\nthree\r\n','src/big.js':'x'.repeat(40*1024)+'\n'});
+ try{
+  const ws=new Workspace({dir:join(r.dir,'ws')});
+  const wt=await ws.create({id:'r2',repoPath:r.repo,baseSha:r.sha,branch:'hak/test-crlf'});
+  await ws.applyEdits(wt,[{path:'src/w.js',replace:[{find:'one\ntwo',with:'uno\ndos'}]}],SCOPE);
+  assert.equal(await readFile(join(wt,'src/w.js'),'utf8'),'uno\r\ndos\r\nthree\r\n');
+  await assert.rejects(()=>ws.applyEdits(wt,[{path:'src/big.js',content:'y'}],SCOPE),/dùng "replace"/);
+  const created=await ws.applyEdits(wt,[{path:'src/new.js',content:'ok\n'}],SCOPE);
+  assert.equal(created[0].mode,'content');
+ }finally{await r.cleanup();}
+});

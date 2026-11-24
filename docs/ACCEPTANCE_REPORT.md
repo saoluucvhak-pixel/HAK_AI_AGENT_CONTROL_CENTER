@@ -12,6 +12,7 @@ Trạng thái phát hành: **RELEASE CANDIDATE. Chưa đủ điều kiện stabl
 | TC05 | Giao việc 1 Agent, phê duyệt, kết quả, lịch sử | PASS (mô phỏng) | `operator-mvp-e2e`, `orchestrator.test.js` |
 | TC06 | Multi-Agent ≥ 4 Agent, handoff, dependency, tổng hợp | PASS (mô phỏng) | `orchestrator.test.js`, `v2-http-e2e` (5 Agent) |
 | TC07 | Agent sửa repo, branch, test, PR | PARTIAL: PASS (chạy thật trên repo GitHub này, model do trợ lý phiên viết) | Lần chạy thật: Work Order → cổng 1 → worktree → `node --test` 203/203 trên `main` → cổng 2 gắn commit `51d75aa6` → đẩy nhánh `hak/1069f1ba-12dc` → PR nháp [#128](https://github.com/saoluucvhak-pixel/HAK_AI_AGENT_CONTROL_CENTER/pull/128). **Không phải** lần gọi API nhà cung cấp (chưa có API key); PR do trợ lý mở bằng công cụ GitHub vì ứng dụng chưa có token. Lần chạy này phát hiện và sửa lỗi: đẩy nhánh mất xác thực do lọc biến môi trường quá chặt (nay có test hồi quy) |
+| (gói B) | Sửa tệp lớn trên repo thật khác | PASS (cục bộ, model do trợ lý viết) | `HAK_XUATHANG_APP`: `app/index.html` 53 KB sửa bằng khối thay thế, 672/672 test đích đạt, repo người dùng không đổi, không đẩy gì lên GitHub. Không phải bằng chứng mô hình thật |
 | TC08 | CI lỗi → Agent sửa | NOT_IMPLEMENTED (vòng sửa kiểm thử cục bộ đã có; chưa lấy log GitHub CI) | backlog B-03 |
 | TC09 | Phê duyệt thiếu/hết hạn/đổi phạm vi bị từ chối | PASS | `approvals.test.js`, `orchestrator.test.js` |
 | TC10 | Mất kết nối AI | PASS (mô phỏng, mức đơn vị) | lỗi 5xx/mạng → RETRY_PENDING, dữ liệu giữ nguyên |
