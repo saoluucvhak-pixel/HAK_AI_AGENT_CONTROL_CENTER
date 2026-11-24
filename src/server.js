@@ -76,7 +76,7 @@ export const server=createServer(async(req,res)=>{
    sendJson(res,200,{token:operatorToken,enabled:process.env.HAK_AGENT_EXECUTION_ENABLED==='true'&&process.env.HAK_OMNIROUTE_ENABLED==='true',notice:'Local-only session; never share this token'});return;
   }
   if(path==='/api/operator/jobs'&&req.method==='GET'){
-   sendJson(res,200,{jobs:[...jobs.values()].map(({id,title,status,steps,error})=>({id,title,status,steps,error}))});return;
+   sendJson(res,200,{jobs:[...jobs.values()].map(({id,title,targetRepo,status,steps,error})=>({id,title,targetRepo:targetRepo||null,status,steps,error}))});return;
   }
   if(path.startsWith('/api/operator/results/')&&req.method==='GET'){
    if(!authorized(req)){sendJson(res,403,{error:'Local operator session required'});return;}
@@ -144,6 +144,30 @@ export const server=createServer(async(req,res)=>{
     }catch{job.status='failed';job.error='Execution failed; check local configuration privately';}
     finally{try{await persistJob(job)}catch{job.error='Failed to save job history';job.status='failed';}activeJob=false;}
    })();
+   return;
+  }
+  if(path==='/api/workflow/prepare'&&req.method==='POST'){
+   const origin=req.headers.origin;
+   const expected='http://127.0.0.1:'+port;
+   if(origin!==expected||!authorized(req)){sendJson(res,403,{error:'Local operator session required'});return;}
+   let body;
+   try{
+    body=await readBody(req);
+    if(!body||typeof body!=='object'||Array.isArray(body)||typeof body.targetRepo!=='string')throw Error('Invalid body');
+    parseRepoRef(body.targetRepo);
+   }catch{sendJson(res,400,{error:'Invalid workflow preparation request'});return;}
+   try{
+    const wf=await prepareRepoWorkflow({
+     targetRepo:body.targetRepo,
+     commitSha:typeof body.commitSha==='string'?body.commitSha:null,
+     runId:Number.isSafeInteger(body.runId)?body.runId:null,
+     paths:Array.isArray(body.paths)?body.paths:[],
+     query:typeof body.query==='string'?body.query:'',
+     role:typeof body.role==='string'?body.role:'backend',
+     requestedSkills:Array.isArray(body.skills)?body.skills:[]
+    });
+    sendJson(res,200,wf);
+   }catch(err){sendJson(res,400,{error:String(err.message||err)});}
    return;
   }
   if(req.method!=='GET'){res.writeHead(405);res.end('Method Not Allowed');return;}
