@@ -141,7 +141,8 @@ test('timeout: a hung model call is aborted and reported as retryable TIMEOUT',a
  }finally{await s.cleanup();}
 });
 test('cancel stops running work, marks tasks CANCELLED and revokes approval',async()=>{
- const s=await buildStack({handler:(body,i,init)=>new Promise((res,rej)=>{init.signal.addEventListener('abort',()=>rej(new DOMException('x','AbortError')));})});
+ // The timer keeps the event loop alive like a real socket would (composite AbortSignals alone do not).
+ const s=await buildStack({handler:(body,i,init)=>new Promise((res,rej)=>{const keep=setTimeout(()=>res('late'),8000);init.signal.addEventListener('abort',()=>{clearTimeout(keep);rej(new DOMException('x','AbortError'));});})});
  try{
   const o=await s.orchestrator.create(input({agents:['architecture','backend']}));
   await s.orchestrator.approve(o.id);await s.orchestrator.start(o.id);
