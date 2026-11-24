@@ -146,3 +146,30 @@ test('prepareRepoWorkflow supports fix-and-verify workflowMode with codex-securi
  assert.deepEqual(wf.skills.map(s=>s.name),['triage-finding','fix-finding','verify-fix']);
  assert.equal(wf.blockedSkills.length,0);
 });
+
+test('prepareRepoWorkflow supports security-audit workflowMode combining cloudflare and codex-security',async()=>{
+ const mockFetch=async(url)=>{
+  if(url.endsWith('/repos/cloudflare/security-audit-skill/contents/skills')){
+   return {ok:true,status:200,json:async()=>[{type:'dir',name:'security-audit',path:'skills/security-audit'}]};
+  }
+  if(url.endsWith('/repos/cloudflare/security-audit-skill/contents/skills/security-audit/SKILL.md')){
+   const b64=Buffer.from('---\nname: security-audit\ndescription: Six-phase audit\n---\n# Audit','utf8').toString('base64');
+   return {ok:true,status:200,json:async()=>({type:'file',encoding:'base64',size:64,content:b64})};
+  }
+  if(url.endsWith('/repos/openai/codex-security/contents/plugins/codex-security/skills')){
+   return {ok:true,status:200,json:async()=>[{type:'dir',name:'fix-finding',path:'plugins/codex-security/skills/fix-finding'}]};
+  }
+  if(url.endsWith('/repos/openai/codex-security/contents/plugins/codex-security/skills/fix-finding/SKILL.md')){
+   const b64=Buffer.from('---\nname: fix-finding\ndescription: Fix finding\n---\n# Fix','utf8').toString('base64');
+   return {ok:true,status:200,json:async()=>({type:'file',encoding:'base64',size:64,content:b64})};
+  }
+  return {ok:false,status:404};
+ };
+ const wf=await prepareRepoWorkflow({
+  targetRepo:'any-client/new-project',
+  workflowMode:'security-audit',
+  fetchImpl:mockFetch
+ });
+ assert.deepEqual(wf.recommendedRoles,['security','testing','backend','quality']);
+ assert.deepEqual(wf.skills.map(s=>s.name).sort(),['fix-finding','security-audit']);
+});
