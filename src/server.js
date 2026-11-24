@@ -22,6 +22,7 @@ import {acceptanceReport} from './acceptance.js';
 import {probeTools} from './readiness-probes.js';
 import {evidenceSnapshot} from './evidence.js';
 import {launchOrcaAgent} from './orca-probe.js';
+import {executeWithExternalFallback} from './tool-runner.js';
 const htmlPath=fileURLToPath(new URL('../web/index.html',import.meta.url));
 const port=Number(process.env.PORT||4317);
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid PORT');
@@ -75,7 +76,7 @@ export const server=createServer(async(req,res)=>{
    await observer(req,res,path);return;
   }
   if(path==='/api/operator/session'&&req.method==='GET'){
-   sendJson(res,200,{token:operatorToken,enabled:process.env.HAK_AGENT_EXECUTION_ENABLED==='true'&&process.env.HAK_ORCA_EXECUTION_ENABLED==='true',notice:'Local-only session; never share this token'});return;
+   sendJson(res,200,{token:operatorToken,enabled:process.env.HAK_AGENT_EXECUTION_ENABLED==='true',orcaEnabled:process.env.HAK_ORCA_EXECUTION_ENABLED==='true',notice:'Local-only session; never share this token'});return;
   }
   if(path==='/api/operator/jobs'&&req.method==='GET'){
    sendJson(res,200,{jobs:[...jobs.values()].map(({id,title,targetRepo,status,steps,error})=>({id,title,targetRepo:targetRepo||null,status,steps,error}))});return;
@@ -97,8 +98,8 @@ export const server=createServer(async(req,res)=>{
    const expected='http://127.0.0.1:'+port;
    if(origin!==expected||!authorized(req)){sendJson(res,403,{error:'Local operator session required'});return;}
    if(activeJob){sendJson(res,409,{error:'Another agent job is running'});return;}
-   if(process.env.HAK_AGENT_EXECUTION_ENABLED!=='true'||process.env.HAK_ORCA_EXECUTION_ENABLED!=='true'){
-    sendJson(res,503,{error:'AI execution is not configured. Enable HAK_AGENT_EXECUTION_ENABLED=true and HAK_ORCA_EXECUTION_ENABLED=true first.'});return;
+   if(process.env.HAK_AGENT_EXECUTION_ENABLED!=='true'){
+    sendJson(res,503,{error:'AI execution is not configured. Enable HAK_AGENT_EXECUTION_ENABLED=true first.'});return;
    }
    let body;
    try{body=await readBody(req);if(!body||typeof body!=='object'||Array.isArray(body))throw Error('Invalid body');
@@ -138,6 +139,9 @@ export const server=createServer(async(req,res)=>{
       if(wf.ciTriage?.reports?.length){
        ctxParts.push('[CI_TRIAGE]\n'+wf.ciTriage.reports.map(r=>`${r.name}: ${r.classification} - ${r.nextAction}`).join('\n'));
       }
+      if(wf.beaconMemories?.length){
+       ctxParts.push('[BEACON_MEMORY]\n'+wf.beaconMemories.map(m=>`${m.title}: ${m.summary}`).join('\n'));
+      }
       if(wf.inspection?.files?.length){
        const avail=wf.inspection.files.filter(f=>f.status==='available').slice(0,4);
        if(avail.length){
@@ -153,11 +157,14 @@ export const server=createServer(async(req,res)=>{
       roles,
       skills:resolvedSkills,
       targetRepo,
-      modelRunner:async({prompt})=>{
-       const launched=launchOrcaAgent({prompt,agent:'codex',worktree:'current',enabled:true,confirm:true});
-       if(!launched.ok)throw new Error(launched.error||'Orca launch failed');
-       return {model:'orca:'+launched.agent,answer:JSON.stringify(launched,null,2)};
-      },
+      modelRunner:async({prompt,role:stepRole})=>executeWithExternalFallback({
+       prompt,
+       role:stepRole,
+       targetRepo,
+       skills:resolvedSkills,
+       orcaEnabled:process.env.HAK_ORCA_EXECUTION_ENABLED==='true',
+       confirm:true
+      }),
       approval:{approved:true,workOrderId:id,approvedBy:'local-operator',reason:'Explicit confirmed local UI action'},
       verifyApproval:async({approval})=>approval.workOrderId===id&&approval.approved===true,
       saveOutput:async({taskId,content})=>{

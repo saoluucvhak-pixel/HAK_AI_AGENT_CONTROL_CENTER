@@ -2,7 +2,8 @@ import {parseTargetRepo} from './github.js';
 import {githubSourceInspection} from './github-source-inspection.js';
 import {githubFailedJobTriage} from './github-ci-triage.js';
 import {validateGithubPatchProposal} from './github-patch-proposal.js';
-import {discoverAllSkills,fetchGithubSkill,findSkills,auditSkillSafety} from './skills-registry.js';
+import {discoverAllSkills,fetchGithubSkill,findSkills,auditSkillSafety,deduplicateSkills} from './skills-registry.js';
+import {queryBeaconMemory} from './tool-runner.js';
 
 export function extractPatchProposalFromText(text,{repository,runId,baseSha,rationale,allowAnyTarget=true}={}){
  if(typeof text!=='string'||!text.trim())throw new Error('Empty AI output');
@@ -49,7 +50,7 @@ export async function prepareRepoWorkflow({
    effectiveQuery=ciTriage.reports.map(r=>r.classification+' '+r.nextAction).join(' ');
   }
  }
- const catalog=await discoverAllSkills({localDir:localSkillsDir,fetchImpl,token,includeRemote:includeRemoteSkills});
+ const catalog=deduplicateSkills(await discoverAllSkills({localDir:localSkillsDir,fetchImpl,token,includeRemote:includeRemoteSkills}));
  let selected=[];
  if(Array.isArray(requestedSkills)&&requestedSkills.length>0){
   const wanted=new Set(requestedSkills);
@@ -59,16 +60,16 @@ export async function prepareRepoWorkflow({
   selected=catalog.filter(s=>auditNames.has(s.name));
   if(selected.length===0)selected=findSkills(effectiveQuery,{role:'security',skills:catalog,limit:4});
  }else if(workflowMode==='fix-and-verify'){
-  const pipelineNames=new Set(['triage-finding','fix-finding','verify-fix','hak-code-auditor']);
+  const pipelineNames=new Set(['systematic-debugging','test-driven-development','triage-finding','fix-finding','verify-fix','verification-before-completion','hak-code-auditor']);
   selected=catalog.filter(s=>pipelineNames.has(s.name));
-  if(selected.length===0)selected=findSkills(effectiveQuery,{role,skills:catalog,limit:3});
+  if(selected.length===0)selected=findSkills(effectiveQuery,{role,skills:catalog,limit:4});
  }else{
   selected=findSkills(effectiveQuery,{role,skills:catalog,limit:3});
  }
 
  const resolvedSkills=[];
  const blockedSkills=[];
- for(const skill of selected.slice(0,5)){
+ for(const skill of deduplicateSkills(selected).slice(0,5)){
   let candidate=skill;
   if(!candidate.body&&typeof candidate.source==='string'&&candidate.source.startsWith('github:')){
    const skillRepo=candidate.source.slice('github:'.length);
@@ -89,6 +90,13 @@ export async function prepareRepoWorkflow({
   inspection=await githubSourceInspection(ref.fullName,commitSha,effectivePaths,{fetchImpl,token,env,extraRepos,allowAnyTarget:true});
  }
 
+ const beaconLookup=queryBeaconMemory({
+  query:effectiveQuery||ref.repo,
+  repo:ref.fullName,
+  enabled:env?.HAK_BEACON_ENABLED==='true',
+  env
+ });
+
  const recommendedRoles=workflowMode==='security-audit'?['security','testing','backend','quality']:workflowMode==='fix-and-verify'?['testing','backend','quality']:[role];
 
  return {
@@ -100,6 +108,7 @@ export async function prepareRepoWorkflow({
   recommendedRoles,
   skills:resolvedSkills,
   blockedSkills,
+  beaconMemories:beaconLookup.memories,
   ciTriage,
   inspection,
   readyForExecution:true,

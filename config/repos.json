@@ -10,8 +10,10 @@
   ],
   "skillRepositories": [
     "saoluucvhak-pixel/HAK_AI_SKILLS",
+    "obra/superpowers",
     "openai/codex-security",
     "cloudflare/security-audit-skill",
+    "Asymptote-Labs/agent-beacon",
     "vercel-labs/agent-browser",
     "vercel-labs/web-interface-guidelines",
     "vercel-labs/skills"

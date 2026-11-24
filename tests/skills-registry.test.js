@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseSkillMarkdown,findSkills,fetchGithubSkillsIndex,fetchGithubSkill,auditSkillSafety,validateStructuredFindings} from '../src/skills-registry.js';
+import {parseSkillMarkdown,findSkills,fetchGithubSkillsIndex,fetchGithubSkill,auditSkillSafety,validateStructuredFindings,deduplicateSkills} from '../src/skills-registry.js';
 
 test('parseSkillMarkdown extracts frontmatter, body, and sha256',()=>{
  const parsed=parseSkillMarkdown('---\nname: find-skills\ndescription: "Discover skills"\n---\n\n# Find Skills\nRun npx skills find.',{source:'github:vercel-labs/skills'});
@@ -118,3 +118,52 @@ test('fetchGithubSkillsIndex and fetchGithubSkill support vercel-labs/web-interf
  assert.equal(skill.name,'web-interface-guidelines');
  assert.match(skill.body,/Web Interface Guidelines/);
 });
+
+test('deduplicateSkills keeps highest priority source when skill names collide',()=>{
+ const items=[
+  {name:'systematic-debugging',source:'github:Asymptote-Labs/agent-beacon',description:'beacon version'},
+  {name:'systematic-debugging',source:'github:obra/superpowers',description:'superpowers version'},
+  {name:'tdd',source:'local:/skills/tdd',description:'local tdd'},
+  {name:'tdd',source:'github:obra/superpowers',description:'remote tdd'},
+ ];
+ const deduped=deduplicateSkills(items);
+ assert.equal(deduped.length,2);
+ const dbg=deduped.find(s=>s.name==='systematic-debugging');
+ const tdd=deduped.find(s=>s.name==='tdd');
+ assert.equal(dbg.source,'github:obra/superpowers');
+ assert.equal(tdd.source,'local:/skills/tdd');
+});
+
+test('fetchGithubSkillsIndex and fetchGithubSkill support obra/superpowers and Asymptote-Labs/agent-beacon',async()=>{
+ const mockFetch=async(url)=>{
+  if(url.endsWith('/repos/obra/superpowers/contents/skills')){
+   return {ok:true,status:200,json:async()=>([{type:'dir',name:'systematic-debugging'}])};
+  }
+  if(url.endsWith('/repos/obra/superpowers/contents/skills/systematic-debugging/SKILL.md')){
+   const b64=Buffer.from('---\nname: systematic-debugging\ndescription: Root cause debugging\n---\n# Systematic Debugging','utf8').toString('base64');
+   return {ok:true,status:200,json:async()=>({type:'file',encoding:'base64',size:80,content:b64})};
+  }
+  if(url.endsWith('/repos/Asymptote-Labs/agent-beacon/contents/agent-skills/skills')){
+   return {ok:true,status:200,json:async()=>([{type:'dir',name:'beacon-memory'}])};
+  }
+  if(url.endsWith('/repos/Asymptote-Labs/agent-beacon/contents/agent-skills/skills/beacon-memory/SKILL.md')){
+   const b64=Buffer.from('---\nname: beacon-memory\ndescription: Agent Beacon memory skill\n---\n# Beacon Memory','utf8').toString('base64');
+   return {ok:true,status:200,json:async()=>({type:'file',encoding:'base64',size:80,content:b64})};
+  }
+  return {ok:false,status:404};
+ };
+ const spIdx=await fetchGithubSkillsIndex('obra/superpowers',{fetchImpl:mockFetch});
+ assert.equal(spIdx[0].name,'systematic-debugging');
+ assert.equal(spIdx[0].basePath,'skills');
+ const spSkill=await fetchGithubSkill('obra/superpowers','systematic-debugging',{fetchImpl:mockFetch});
+ assert.equal(spSkill.name,'systematic-debugging');
+ assert.match(spSkill.body,/Systematic Debugging/);
+
+ const abIdx=await fetchGithubSkillsIndex('Asymptote-Labs/agent-beacon',{fetchImpl:mockFetch});
+ assert.equal(abIdx[0].name,'beacon-memory');
+ assert.equal(abIdx[0].basePath,'agent-skills/skills');
+ const abSkill=await fetchGithubSkill('Asymptote-Labs/agent-beacon','beacon-memory',{fetchImpl:mockFetch});
+ assert.equal(abSkill.name,'beacon-memory');
+ assert.match(abSkill.body,/Beacon Memory/);
+});
+
