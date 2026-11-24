@@ -8,12 +8,12 @@ const SKILL_NAME=/^[a-z0-9][a-z0-9-]{0,79}$/;
 
 const ROLE_SKILL_HINTS={
  architecture:['hak-archify-architecture','archify','security-audit','find-skills','hak-code-auditor'],
- ui:['agent-browser','hak-ui-designer','hak-ui-ux-pro-max','hak-vercel-web-design','hak-unslop-design'],
+ ui:['agent-browser','web-interface-guidelines','hak-ui-designer','hak-ui-ux-pro-max','hak-vercel-web-design','hak-unslop-design'],
  backend:['fix-finding','security-diff-scan','find-skills','hak-code-auditor','hak-data-integrity','hak-migration-manager'],
  data:['hak-parent-child-data-model','hak-data-integrity','hak-smart-filter'],
  security:['security-audit','security-scan','triage-finding','check-skills','hak-electron-security','hak-code-auditor'],
  testing:['agent-browser','triage-finding','verify-fix','security-audit','hak-code-auditor','hak-payroll-validator'],
- quality:['agent-browser','verify-fix','security-diff-scan','security-audit','hak-code-auditor','hak-unslop-design'],
+ quality:['agent-browser','web-interface-guidelines','verify-fix','security-diff-scan','security-audit','hak-code-auditor','hak-unslop-design'],
  release:['hak-release-builder'],
  ocr:['hak-document-markdown','hak-accounting-report']
 };
@@ -46,6 +46,10 @@ export function validateStructuredFindings(findings){
 
 const SKILL_REPO_BASE_PATHS={
  'openai/codex-security':'plugins/codex-security/skills'
+};
+
+const SINGLE_FILE_SKILLS={
+ 'vercel-labs/web-interface-guidelines':{name:'web-interface-guidelines',filePath:'command.md',description:'Review UI code for Vercel Web Interface Guidelines compliance'}
 };
 
 export function resolveSkillBasePath(repoFullName,overrideBasePath){
@@ -121,6 +125,10 @@ export async function loadLocalSkills(dir='./skills'){
 
 export async function fetchGithubSkillsIndex(repoRef,{fetchImpl=fetch,token=process.env.GITHUB_TOKEN,env=process.env,extraRepos=[],basePath}={}){
  const ref=parseRepoRef(repoRef,{env,extraRepos});
+ const single=SINGLE_FILE_SKILLS[ref.fullName];
+ if(single){
+  return [{name:single.name,repo:ref.fullName,basePath:single.filePath,path:single.filePath,url:'https://github.com/'+ref.fullName+'/blob/main/'+single.filePath}];
+ }
  const skillDir=resolveSkillBasePath(ref.fullName,basePath);
  const headers={Accept:'application/vnd.github+json','User-Agent':'HAK-Operations-Dashboard'};
  if(token)headers.Authorization='Bearer '+token;
@@ -137,10 +145,11 @@ export async function fetchGithubSkillsIndex(repoRef,{fetchImpl=fetch,token=proc
 export async function fetchGithubSkill(repoRef,skillName,{fetchImpl=fetch,token=process.env.GITHUB_TOKEN,env=process.env,extraRepos=[],basePath}={}){
  if(!SKILL_NAME.test(skillName))throw new Error('Invalid skill name');
  const ref=parseRepoRef(repoRef,{env,extraRepos});
- const skillDir=resolveSkillBasePath(ref.fullName,basePath);
+ const single=SINGLE_FILE_SKILLS[ref.fullName];
+ const contentPath=single&&single.name===skillName?single.filePath:resolveSkillBasePath(ref.fullName,basePath)+'/'+skillName+'/SKILL.md';
  const headers={Accept:'application/vnd.github+json','User-Agent':'HAK-Operations-Dashboard'};
  if(token)headers.Authorization='Bearer '+token;
- const response=await fetchImpl('https://api.github.com/repos/'+ref.fullName+'/contents/'+skillDir+'/'+skillName+'/SKILL.md',{headers,redirect:'error',signal:AbortSignal.timeout(10000)});
+ const response=await fetchImpl('https://api.github.com/repos/'+ref.fullName+'/contents/'+contentPath,{headers,redirect:'error',signal:AbortSignal.timeout(10000)});
  if(!response.ok)throw new Error('GitHub HTTP '+response.status);
  const data=await response.json();
  if(data.type!=='file'||data.encoding!=='base64'||typeof data.content!=='string'||!Number.isSafeInteger(data.size)||data.size>MAX_SKILL_BYTES){
