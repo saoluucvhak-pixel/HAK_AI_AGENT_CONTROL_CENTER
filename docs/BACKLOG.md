@@ -23,9 +23,9 @@ PR #126 (HAK_TEST_AI_WINDOWS) đang mở, chưa merge, không xung đột với 
 | HAK AI Skills registry / Code Quality gate / Claude-Mem theo dự án | NOT_IMPLEMENTED (tích hợp) | module Claude-Mem bridge cũ chỉ là cầu "reviewed-export-only" |
 | OCR, Orca | PARTIALLY_IMPLEMENTED | probe kết nối; không tích hợp vào Work Order |
 | Kết nối Claude/Gemini thật | BLOCKED_BY_EXTERNAL_DEPENDENCY | cần API key của người dùng |
-| Bộ cài Windows (Inno Setup, per-user, runtime Node kèm) | IMPLEMENTED_NOT_VERIFIED | build + test cài/nâng cấp/gỡ chạy trên Windows runner (`release-windows.yml`) |
+| Bộ cài Windows (Inno Setup, per-user, runtime Node kèm) | IMPLEMENTED_AND_VERIFIED (runner CI) | cài/nâng cấp/gỡ 21/21 trên `6a74382`; chưa thử trên Windows sạch của người dùng |
 | Ký mã (code signing) | NOT_IMPLEMENTED | bộ cài **chưa ký** |
-| Sao lưu/phục hồi dữ liệu v2 (providers, work orders) | NOT_IMPLEMENTED | chỉ có Observer backup cũ |
+| Sao lưu/phục hồi dữ liệu v2 | PARTIALLY_IMPLEMENTED | `src/data-backup.js` + test; chưa có UI phục hồi |
 | SQLite / truy vấn lịch sử lớn | NOT_IMPLEMENTED | JSON atomic + `.bak` đủ cho quy mô hiện tại; chưa đo |
 | Hiệu năng 1/4/8 Agent, 1.000 công việc | NOT_RUN | chưa đo |
 
@@ -45,7 +45,7 @@ PR #126 (HAK_TEST_AI_WINDOWS) đang mở, chưa merge, không xung đột với 
 | B-01 | P0 | Kiểm thử Claude thật + Gemini thật (TC03/TC04) | Khóa của người dùng; công việc không nhạy cảm; lưu bằng chứng |
 | B-02 | P0 | Chạy `release-windows.yml` xanh trên commit phát hành; kiểm thử cài trên Windows sạch (TC01/13/14, TC17 bởi người) | artifact + `INSTALLER_TEST_RESULTS.json` |
 | B-03 | P1 | Agent thực thi trên repo: worktree + branch + test + PR + theo dõi CI + sửa CI (TC07/08) | PR thật trên repo thử nghiệm |
-| B-04 | P1 | Sao lưu/phục hồi dữ liệu v2 (TC12) | khôi phục độc lập, đối chiếu checksum |
+| B-04 | P1 | Hoàn thiện phục hồi trên UI và kiểm thử phục hồi trên máy độc lập (đã có sao lưu/xác minh/phục hồi dòng lệnh, TC12) | khôi phục độc lập, đối chiếu checksum |
 | B-05 | P1 | Tích hợp HAK Code Quality / Skills qua CLI có phiên bản | gate thật, không dùng kết quả AI tự đánh giá |
 | B-06 | P1 | Ký mã bộ cài | chứng thư do người có thẩm quyền cấp |
 | B-07 | P2 | Đo hiệu năng, quyết định SQLite | số liệu đo có cấu hình máy |
