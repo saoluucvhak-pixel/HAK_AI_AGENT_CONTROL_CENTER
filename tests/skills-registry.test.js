@@ -167,3 +167,36 @@ test('fetchGithubSkillsIndex and fetchGithubSkill support obra/superpowers and A
  assert.match(abSkill.body,/Beacon Memory/);
 });
 
+test('fetchGithubSkillsIndex and fetchGithubSkill support ruvnet/ruflo and heydamir/unslop',async()=>{
+ const mockFetch=async(url)=>{
+  if(url.endsWith('/repos/ruvnet/ruflo/contents/.claude/skills')){
+   return {ok:true,status:200,json:async()=>([{type:'dir',name:'swarm-orchestration'}])};
+  }
+  if(url.endsWith('/repos/ruvnet/ruflo/contents/.claude/skills/swarm-orchestration/SKILL.md')){
+   const b64=Buffer.from('---\nname: swarm-orchestration\ndescription: Ruflo swarm orchestration\n---\n# Swarm Orchestration','utf8').toString('base64');
+   return {ok:true,status:200,json:async()=>({type:'file',encoding:'base64',size:85,content:b64})};
+  }
+  if(url.endsWith('/repos/heydamir/unslop/contents/skills')){
+   return {ok:true,status:200,json:async()=>([{type:'dir',name:'unslop'}])};
+  }
+  if(url.endsWith('/repos/heydamir/unslop/contents/skills/unslop/SKILL.md')){
+   const b64=Buffer.from('---\nname: unslop\ndescription: Turn AI-looking UI into designed interface\n---\n# Unslop','utf8').toString('base64');
+   return {ok:true,status:200,json:async()=>({type:'file',encoding:'base64',size:85,content:b64})};
+  }
+  return {ok:false,status:404};
+ };
+ const rfIdx=await fetchGithubSkillsIndex('ruvnet/ruflo',{fetchImpl:mockFetch});
+ assert.equal(rfIdx[0].name,'swarm-orchestration');
+ assert.equal(rfIdx[0].basePath,'.claude/skills');
+ const rfSkill=await fetchGithubSkill('ruvnet/ruflo','swarm-orchestration',{fetchImpl:mockFetch});
+ assert.equal(rfSkill.name,'swarm-orchestration');
+ assert.match(rfSkill.body,/Swarm Orchestration/);
+
+ const usIdx=await fetchGithubSkillsIndex('heydamir/unslop',{fetchImpl:mockFetch});
+ assert.equal(usIdx[0].name,'unslop');
+ assert.equal(usIdx[0].basePath,'skills');
+ const usSkill=await fetchGithubSkill('heydamir/unslop','unslop',{fetchImpl:mockFetch});
+ assert.equal(usSkill.name,'unslop');
+ assert.match(usSkill.body,/Unslop/);
+});
+

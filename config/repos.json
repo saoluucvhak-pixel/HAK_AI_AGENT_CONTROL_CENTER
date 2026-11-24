@@ -11,6 +11,8 @@
   "skillRepositories": [
     "saoluucvhak-pixel/HAK_AI_SKILLS",
     "obra/superpowers",
+    "ruvnet/ruflo",
+    "heydamir/unslop",
     "openai/codex-security",
     "cloudflare/security-audit-skill",
     "Asymptote-Labs/agent-beacon",

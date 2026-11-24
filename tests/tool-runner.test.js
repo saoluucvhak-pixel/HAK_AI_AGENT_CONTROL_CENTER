@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   probeBeacon,
+  probeRuflo,
   queryBeaconMemory,
   executeWithExternalFallback,
 } from '../src/tool-runner.js';
@@ -98,4 +99,40 @@ test('executeWithExternalFallback uses Orca when reachable and falls back to int
   assert.equal(failed.fallbackUsed, true);
   assert.equal(failed.runner, 'internal-fallback');
   assert.ok(failed.answer.length > 0);
+});
+
+test('probeRuflo and executeWithExternalFallback handle ruflo reachable and unavailable states', () => {
+  assert.equal(probeRuflo({ enabled: false }).status, 'disabled');
+  const reachable = probeRuflo({
+    enabled: true,
+    run: () => ({ status: 0, stdout: 'ruflo 3.0.0', stderr: '' }),
+  });
+  assert.equal(reachable.status, 'reachable');
+  assert.equal(reachable.connected, true);
+
+  const delegated = executeWithExternalFallback({
+    prompt: 'Coordinate swarm',
+    role: 'architecture',
+    targetRepo: 'ruvnet/ruflo',
+    skills: [{ name: 'swarm-orchestration' }],
+    orcaEnabled: false,
+    rufloEnabled: true,
+    confirm: true,
+    run: () => ({ status: 0, stdout: 'ruflo 3.0.0', stderr: '' }),
+  });
+  assert.equal(delegated.fallbackUsed, false);
+  assert.equal(delegated.runner, 'ruflo');
+
+  const fallback = executeWithExternalFallback({
+    prompt: 'Coordinate swarm',
+    role: 'architecture',
+    targetRepo: 'ruvnet/ruflo',
+    skills: [{ name: 'swarm-orchestration' }],
+    orcaEnabled: false,
+    rufloEnabled: true,
+    confirm: true,
+    run: () => ({ status: 1, error: new Error('ENOENT') }),
+  });
+  assert.equal(fallback.fallbackUsed, true);
+  assert.equal(fallback.runner, 'internal-fallback');
 });
