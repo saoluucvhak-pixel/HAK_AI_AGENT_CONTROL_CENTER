@@ -98,6 +98,7 @@ export async function prepareRepoWorkflow({
  });
 
  const recommendedRoles=workflowMode==='security-audit'?['security','testing','backend','quality']:workflowMode==='fix-and-verify'?['testing','backend','quality']:[role];
+ const missionPrompt=buildSessionMissionPrompt({targetRepo:ref.fullName,goal:effectiveQuery,workflowMode,skills:resolvedSkills,recommendedRoles});
 
  return {
   schemaVersion:1,
@@ -111,7 +112,27 @@ export async function prepareRepoWorkflow({
   beaconMemories:beaconLookup.memories,
   ciTriage,
   inspection,
+  missionPrompt,
   readyForExecution:true,
   requiresHumanApproval:true
  };
+}
+
+export function buildSessionMissionPrompt({targetRepo,goal='',workflowMode='fix-and-verify',skills=[],recommendedRoles=['testing','backend','quality']}={}){
+ const skillList=(Array.isArray(skills)?skills:[]).map(s=>s?.name).filter(Boolean);
+ const applied=skillList.length?skillList.join(', '):'systematic-debugging, test-driven-development, verification-before-completion';
+ const target=String(targetRepo||'').trim()||'target-repo';
+ const objective=String(goal||'').trim()||'Kiểm tra, sửa lỗi và nâng cấp toàn diện';
+ return [
+  `[HAK_CONTROL_SESSION_MISSION]`,
+  `Target: ${target} | Mode: ${workflowMode} | Roles: ${recommendedRoles.join(' -> ')}`,
+  `Goal: ${objective}`,
+  `Skills (deduplicated): ${applied}`,
+  `Phases:`,
+  `1. Scope & Baseline: kiểm tra git, PR mở, CI và chạy test nền trên ${target}.`,
+  `2. Plan & Standards: áp dụng chuẩn ${applied}.`,
+  `3. Branch & TDD: tạo nhánh mới từ main, viết test tái hiện (RED) rồi sửa code (GREEN/REFACTOR).`,
+  `4. Verify: chạy lại toàn bộ check + test + acceptance pass 100%.`,
+  `5. Ship: mở PR, chờ CI xanh, squash-merge vào main và dọn nhánh thừa.`
+ ].join('\n');
 }
