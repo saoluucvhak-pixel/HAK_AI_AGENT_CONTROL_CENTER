@@ -1,7 +1,25 @@
 import {parseRepoRef} from './github.js';
 import {githubSourceInspection} from './github-source-inspection.js';
 import {githubFailedJobTriage} from './github-ci-triage.js';
+import {validateGithubPatchProposal} from './github-patch-proposal.js';
 import {discoverAllSkills,fetchGithubSkill,findSkills} from './skills-registry.js';
+
+export function extractPatchProposalFromText(text,{repository,runId,baseSha,rationale}={}){
+ if(typeof text!=='string'||!text.trim())throw new Error('Empty AI output');
+ const fenced=text.match(/```json\s*([\s\S]*?)\s*```/i);
+ const rawJson=fenced?fenced[1]:text.trim();
+ let parsed;
+ try{parsed=JSON.parse(rawJson);}catch{throw new Error('AI output does not contain valid JSON patch proposal');}
+ const changes=Array.isArray(parsed?.changes)?parsed.changes:Array.isArray(parsed)?parsed:null;
+ if(!changes)throw new Error('Missing changes array in AI patch proposal');
+ return validateGithubPatchProposal({
+  repository:parsed?.repository||repository,
+  runId:Number.isSafeInteger(parsed?.runId)?parsed.runId:runId,
+  baseSha:parsed?.baseSha||baseSha,
+  rationale:parsed?.rationale||rationale||'AI-proposed patch from HAK Control Center',
+  changes
+ });
+}
 
 export async function prepareRepoWorkflow({
  targetRepo,

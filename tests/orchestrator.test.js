@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {prepareRepoWorkflow} from '../src/orchestrator.js';
+import {prepareRepoWorkflow,extractPatchProposalFromText} from '../src/orchestrator.js';
 import {executeApprovedWorkOrder} from '../src/agent-engine.js';
 
 test('prepareRepoWorkflow + executeApprovedWorkOrder injects skill context and audits appliedSkills',async()=>{
@@ -86,4 +86,17 @@ test('prepareRepoWorkflow auto-triages failed CI runId and inspects hinted files
  assert.equal(wf.inspection.files[0].path,'src/app.js');
  assert.equal(wf.inspection.files[0].status,'available');
  assert.equal(wf.skills[0].name,'hak-code-auditor');
+});
+
+test('extractPatchProposalFromText parses fenced JSON and validates proposal shape',()=>{
+ const sha='a'.repeat(40),blob='b'.repeat(40);
+ const proposal=extractPatchProposalFromText('Proposal:\n```json\n{"changes":[{"path":"src/app.js","expectedBlobSha":"'+blob+'","newContent":"export const x = 1;"}]}\n```',{
+  repository:'HAK_KHO_OFFLINE',
+  runId:42,
+  baseSha:sha,
+  rationale:'Fix failing assertion in src/app.js'
+ });
+ assert.equal(proposal.kind,'hak-github-patch-proposal');
+ assert.equal(proposal.repository,'HAK_KHO_OFFLINE');
+ assert.equal(proposal.changes[0].path,'src/app.js');
 });
