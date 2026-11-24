@@ -7,7 +7,8 @@ import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {snapshots,safeRepo,getAllowedRepositories,parseRepoRef} from './github.js';
 import {discoverAllSkills,findSkills} from './skills-registry.js';
-import {prepareRepoWorkflow} from './orchestrator.js';
+import {prepareRepoWorkflow,extractPatchProposalFromText} from './orchestrator.js';
+import {executeGithubPatchProposal} from './github-patch-executor.js';
 import {createSnapshotCache} from './github-snapshot-cache.js';
 import {githubPrEvidence} from './github-pr-evidence.js';
 import {assessGithubPrEvidence} from './github-pr-assessment.js';
@@ -115,6 +116,9 @@ export const server=createServer(async(req,res)=>{
    const id=randomBytes(12).toString('hex');
    const targetRepo=typeof body.targetRepo==='string'&&body.targetRepo.trim()?parseRepoRef(body.targetRepo.trim()).fullName:null;
    const requestedSkills=Array.isArray(body.skills)?body.skills.map(s=>s.trim()).filter(Boolean):[];
+   const commitSha=typeof body.commitSha==='string'&&/^[a-f0-9]{40}$/.test(body.commitSha.trim())?body.commitSha.trim():null;
+   const runId=Number.isSafeInteger(body.runId)&&body.runId>0?body.runId:null;
+   const paths=Array.isArray(body.paths)?body.paths.filter(p=>typeof p==='string'&&p.trim()).slice(0,10):[];
    const job={id,title:body.title.trim(),targetRepo,status:'running',steps:[],error:null};
    try{await persistJob(job)}catch{sendJson(res,503,{error:'Local job storage unavailable'});return;}
    jobs.set(id,job);activeJob=true;
@@ -122,12 +126,26 @@ export const server=createServer(async(req,res)=>{
    void (async()=>{
     try{
      let resolvedSkills=[];
+     let enrichedDescription=body.description;
      if(targetRepo||requestedSkills.length>0){
-      const wf=await prepareRepoWorkflow({targetRepo:targetRepo||'HAK_AI_AGENT_CONTROL_CENTER',query:body.title+' '+body.description,role:body.role,requestedSkills,includeRemoteSkills:requestedSkills.length>0});
+      const wf=await prepareRepoWorkflow({targetRepo:targetRepo||'HAK_AI_AGENT_CONTROL_CENTER',commitSha,runId,paths,query:body.title+' '+body.description,role:body.role,requestedSkills,includeRemoteSkills:requestedSkills.length>0||Boolean(targetRepo)});
       resolvedSkills=wf.skills;
+      const ctxParts=[];
+      if(wf.ciTriage?.reports?.length){
+       ctxParts.push('[CI_TRIAGE]\n'+wf.ciTriage.reports.map(r=>`${r.name}: ${r.classification} - ${r.nextAction}`).join('\n'));
+      }
+      if(wf.inspection?.files?.length){
+       const avail=wf.inspection.files.filter(f=>f.status==='available').slice(0,4);
+       if(avail.length){
+        ctxParts.push('[SOURCE_FILES]\n'+avail.map(f=>`File: ${f.path} (blobSha: ${f.blobSha})\n${String(f.content||'').slice(0,1200)}`).join('\n---\n'));
+       }
+      }
+      if(ctxParts.length){
+       enrichedDescription=(body.description+'\n\n'+ctxParts.join('\n\n')).slice(0,7800);
+      }
      }
      const result=await executeApprovedWorkOrder({
-      workOrder:{id,projectId:'HAK',title:job.title,description:body.description,acceptanceCriteria:['Return a reviewable proposal']},
+      workOrder:{id,projectId:'HAK',title:job.title,description:enrichedDescription,acceptanceCriteria:['Return a reviewable proposal']},
       roles:[body.role],
       skills:resolvedSkills,
       targetRepo,
@@ -167,6 +185,30 @@ export const server=createServer(async(req,res)=>{
      requestedSkills:Array.isArray(body.skills)?body.skills:[]
     });
     sendJson(res,200,wf);
+   }catch(err){sendJson(res,400,{error:String(err.message||err)});}
+   return;
+  }
+  if(path==='/api/github/create-pr'&&req.method==='POST'){
+   const origin=req.headers.origin;
+   const expected='http://127.0.0.1:'+port;
+   if(origin!==expected||!authorized(req)){sendJson(res,403,{error:'Local operator session required'});return;}
+   if(process.env.HAK_GITHUB_WRITE_ENABLED!=='true'||!process.env.GITHUB_TOKEN){
+    sendJson(res,503,{error:'GitHub write disabled. Set HAK_GITHUB_WRITE_ENABLED=true and GITHUB_TOKEN in .env first.'});return;
+   }
+   let body;
+   try{
+    body=await readBody(req);
+    if(!body||typeof body!=='object'||Array.isArray(body)||body.confirm!==true||typeof body.branch!=='string')throw Error('Invalid request');
+   }catch{sendJson(res,400,{error:'Invalid PR request or missing confirmation'});return;}
+   try{
+    const proposal=body.proposal?body.proposal:extractPatchProposalFromText(body.outputText,{
+     repository:body.repository,
+     runId:body.runId,
+     baseSha:body.baseSha,
+     rationale:body.rationale
+    });
+    const result=await executeGithubPatchProposal(proposal,{branch:body.branch.trim(),authorized:true});
+    sendJson(res,201,result);
    }catch(err){sendJson(res,400,{error:String(err.message||err)});}
    return;
   }

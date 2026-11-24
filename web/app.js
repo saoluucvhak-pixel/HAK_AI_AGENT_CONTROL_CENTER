@@ -180,12 +180,33 @@ $('agent-job-form').addEventListener('submit',async e=>{
  try{
   const skills=$('job-skills').value.split(',').map(x=>x.trim()).filter(Boolean);
   const targetRepo=$('job-target-repo').value||undefined;
-  const r=await fetch('/api/operator/jobs',{method:'POST',headers:{'Content-Type':'application/json','X-HAK-Operator-Token':operatorToken},body:JSON.stringify({title:$('job-title').value,description:$('job-description').value,role:$('job-role').value,targetRepo,skills,confirm:$('job-confirm').checked})});
+  const commitSha=$('job-commit-sha').value.trim()||undefined;
+  const runIdRaw=Number($('job-run-id').value);
+  const runId=Number.isSafeInteger(runIdRaw)&&runIdRaw>0?runIdRaw:undefined;
+  const paths=$('job-paths').value.split(',').map(x=>x.trim()).filter(Boolean);
+  const r=await fetch('/api/operator/jobs',{method:'POST',headers:{'Content-Type':'application/json','X-HAK-Operator-Token':operatorToken},body:JSON.stringify({title:$('job-title').value,description:$('job-description').value,role:$('job-role').value,targetRepo,commitSha,runId,paths,skills,confirm:$('job-confirm').checked})});
   const result=await r.json();
   if(!r.ok)throw Error(result.error||'Request failed');
   $('job-message').textContent='Đã nhận công việc '+result.id+'. Nhấn Cập nhật công việc để xem kết quả.';
   await refreshJobs();
  }catch(error){$('job-message').textContent=error.message}
+ finally{button.disabled=false;}
+});
+$('github-pr-form').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const button=$('github-pr-form').querySelector('button[type=submit]');
+ button.disabled=true;$('pr-message').textContent='Đang tạo Draft PR trên GitHub…';
+ try{
+  const repository=$('job-target-repo').value||'HAK_AI_AGENT_CONTROL_CENTER';
+  const baseSha=$('job-commit-sha').value.trim();
+  const runId=Number($('job-run-id').value);
+  const r=await fetch('/api/github/create-pr',{method:'POST',headers:{'Content-Type':'application/json','X-HAK-Operator-Token':operatorToken},body:JSON.stringify({repository,baseSha,runId:Number.isSafeInteger(runId)&&runId>0?runId:undefined,branch:$('pr-branch').value.trim(),outputText:$('pr-output').value,rationale:$('job-title').value.trim()||undefined,confirm:$('pr-confirm').checked})});
+  const result=await r.json();
+  if(!r.ok)throw Error(result.error||'Create PR failed');
+  $('pr-message').replaceChildren(el('span','Đã tạo Draft PR #'+result.prNumber+': '),(() => {const a=el('a',result.prUrl);addLink($('pr-message'),result.prUrl,result.prUrl);return '';})());
+  $('pr-message').textContent='Đã tạo Draft PR #'+result.prNumber+': ';
+  addLink($('pr-message'),result.prUrl,result.prUrl);
+ }catch(error){$('pr-message').textContent=error.message;}
  finally{button.disabled=false;}
 });
 $('refresh-jobs').addEventListener('click',refreshJobs);
