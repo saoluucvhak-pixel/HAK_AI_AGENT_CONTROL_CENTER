@@ -13,6 +13,7 @@
     "saoluucvhak-pixel/HAK_AI_SKILLS",
     "openai/codex-security",
     "cloudflare/security-audit-skill",
+    "vercel-labs/agent-browser",
     "vercel-labs/skills"
   ]
 }
