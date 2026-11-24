@@ -40,15 +40,17 @@ const stateDir=dataDir(process.env);
 const secretStore=createSecretStore(stateDir);
 const providers=new ProviderManager({dir:stateDir,secrets:secretStore});
 await providers.load();
-// One-time migration of the legacy .env gateway settings into the secret store (value is never logged).
-if(providers.connectionCounts().total===0&&process.env.HAK_OMNIROUTE_ENABLED==='true'&&(process.env.HAK_OMNIROUTE_API_KEY||'').length>=16){
- try{await providers.upsert({type:'openai-compatible',name:'OmniRoute (từ cấu hình cũ)',endpoint:process.env.HAK_OMNIROUTE_URL||'http://127.0.0.1:20128',model:process.env.HAK_OMNIROUTE_MODEL&&process.env.HAK_OMNIROUTE_MODEL!=='auto'?process.env.HAK_OMNIROUTE_MODEL:'auto'},process.env.HAK_OMNIROUTE_API_KEY);}catch{/* invalid legacy values: user configures in Provider Manager */}
-}
 const approvals=new ApprovalStore({path:join(stateDir,'approvals.json')});
 await approvals.load();
 const legacyApprovals=new ApprovalStore({defaultTtlMs:5*60*1000});
 const orchestrator=new Orchestrator({dir:stateDir,providers,approvals,onEvent:event=>observerStore.add(event)});
 await orchestrator.load();
+// One-time migration of the legacy .env gateway settings into the secret store (value is never logged).
+// Runs in the background after the port is open: DPAPI goes through PowerShell and must not delay startup.
+async function migrateLegacyGateway(){
+ if(providers.connectionCounts().total!==0||process.env.HAK_OMNIROUTE_ENABLED!=='true'||(process.env.HAK_OMNIROUTE_API_KEY||'').length<16)return;
+ try{await providers.upsert({type:'openai-compatible',name:'OmniRoute (từ cấu hình cũ)',endpoint:process.env.HAK_OMNIROUTE_URL||'http://127.0.0.1:20128',model:process.env.HAK_OMNIROUTE_MODEL&&process.env.HAK_OMNIROUTE_MODEL!=='auto'?process.env.HAK_OMNIROUTE_MODEL:'auto'},process.env.HAK_OMNIROUTE_API_KEY);}catch{/* invalid legacy values: user configures in Provider Manager */}
+}
 const apiV2=createApiV2({getPort:()=>livePort(),token:operatorToken,providers,orchestrator,dataDir:stateDir,onShutdown:()=>{server.close();setTimeout(()=>process.exit(0),1500).unref();}});
 const jobs=new Map();
 let activeJob=false;
@@ -218,4 +220,4 @@ export const server=createServer(async(req,res)=>{
   res.writeHead(404);res.end('Not Found');
  }catch(e){res.writeHead(500,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'Dashboard unavailable'}));}
 });
-if(process.env.NODE_ENV!=='test')server.listen(port,host,()=>console.log('HAK dashboard on http://'+host+':'+port));
+if(process.env.NODE_ENV!=='test')server.listen(port,host,()=>{console.log('HAK dashboard on http://'+host+':'+port);void migrateLegacyGateway();});
