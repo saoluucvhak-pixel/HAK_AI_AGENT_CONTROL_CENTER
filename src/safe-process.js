@@ -1,6 +1,6 @@
 import {spawn} from 'node:child_process';
 import {mkdirSync} from 'node:fs';
-import {tmpdir,devNull} from 'node:os';
+import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {redact} from './secrets.js';
 
@@ -34,6 +34,8 @@ export function runProcess(cmd,args,{cwd,env=scrubbedEnv(),timeoutMs=60000,maxBy
   child.on('close',code=>done(code));
  });
 }
+// Git for Windows rejects Node's os.devNull (\\.\nul); it needs the plain DOS name.
+const NULL_DEVICE=process.platform==='win32'?'NUL':'/dev/null';
 const HOOKS_DIR=join(tmpdir(),'hak-empty-hooks');
 /**
  * Git with the repository's own configuration neutralised: no hooks, no fsmonitor, no signing,
@@ -42,7 +44,7 @@ const HOOKS_DIR=join(tmpdir(),'hak-empty-hooks');
 export function runGit(args,{cwd,timeoutMs=60000,signal,extraEnv={},maxBytes=256*1024,secrets=[]}={}){
  mkdirSync(HOOKS_DIR,{recursive:true});
  const hardened=['-c','core.hooksPath='+HOOKS_DIR,'-c','core.fsmonitor=false','-c','commit.gpgsign=false','-c','core.autocrlf=false','-c','protocol.ext.allow=never','-c','user.name=HAK Agent','-c','user.email=hak-agent@localhost'];
- const env=scrubbedEnv({GIT_TERMINAL_PROMPT:'0',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:devNull,GIT_ASKPASS:'echo',...extraEnv});
+ const env=scrubbedEnv({GIT_TERMINAL_PROMPT:'0',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:NULL_DEVICE,GIT_ASKPASS:'echo',...extraEnv});
  return runProcess('git',[...hardened,...args],{cwd,env,timeoutMs,signal,maxBytes,secrets});
 }
 export async function gitAvailable(){
