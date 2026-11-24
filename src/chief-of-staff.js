@@ -1,9 +1,18 @@
 const PRIORITIES = new Set(['critical','high','normal','low']);
 const TYPES = new Set(['feature','bug','security','maintenance','research']);
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
+const SKILL_ID = /^(?:hak-[a-z0-9][a-z0-9-]{1,62}|archify)$/;
+const TARGET_REPO = /^(?:[A-Za-z0-9_.-]{1,100}\/)?[A-Za-z0-9_.-]{1,100}$/;
 function nonEmpty(value,field,max=2000) {
   if(typeof value!=='string'||!value.trim()||value.length>max) throw new Error('Invalid '+field);
   return value.trim();
+}
+function normalizeSkills(skills) {
+  if(skills===undefined) return undefined;
+  if(!Array.isArray(skills)||skills.length>12) throw new Error('Invalid skills list');
+  const normalized=skills.map(s=>{if(typeof s!=='string'||!SKILL_ID.test(s))throw new Error('Unknown skill identifier');return s;});
+  if(new Set(normalized).size!==normalized.length) throw new Error('Duplicate skill identifier');
+  return Object.freeze(normalized);
 }
 export function createWorkOrder(input) {
   if(!input || typeof input!=='object'||Array.isArray(input)) throw new Error('Invalid work order');
@@ -17,15 +26,24 @@ export function createWorkOrder(input) {
   const acceptanceCriteria=input.acceptanceCriteria;
   if(!Array.isArray(acceptanceCriteria)||acceptanceCriteria.length===0||acceptanceCriteria.length>30) throw new Error('Acceptance criteria required');
   const criteria=acceptanceCriteria.map(x=>nonEmpty(x,'acceptance criterion',500));
-  return Object.freeze({id,projectId,title,description,priority,type,acceptanceCriteria:criteria,requiresApproval:true,status:'PROPOSED',createdAt:new Date().toISOString()});
+  const extra={};
+  if(input.targetRepo!==undefined){
+    const repo=nonEmpty(input.targetRepo,'targetRepo',201);
+    if(!TARGET_REPO.test(repo)||repo.includes('..')) throw new Error('Invalid targetRepo');
+    extra.targetRepo=repo;
+  }
+  const skills=normalizeSkills(input.skills);
+  if(skills!==undefined) extra.skills=skills;
+  return Object.freeze({id,projectId,title,description,priority,type,acceptanceCriteria:criteria,...extra,requiresApproval:true,status:'PROPOSED',createdAt:new Date().toISOString()});
 }
-export function proposeDelegation(order,agentRoles) {
+export function proposeDelegation(order,agentRoles,options={}) {
   if(order?.status!=='PROPOSED'||order.requiresApproval!==true) throw new Error('Invalid work order state');
   if(!Array.isArray(agentRoles)||agentRoles.length<1||agentRoles.length>8) throw new Error('Agent count must be 1-8');
   const allowed=new Set(['architecture','ui','backend','data','security','testing','quality','release','ocr']);
   const roles=agentRoles.map(role=>{if(!allowed.has(role))throw new Error('Unknown agent role');return role;});
   if(new Set(roles).size!==roles.length)throw new Error('Duplicate agent role');
-  return {workOrderId:order.id,projectId:order.projectId,roles,approval:'PENDING',canExecute:false,canMerge:false};
+  const skills=normalizeSkills(options?.skills!==undefined?options.skills:order.skills);
+  return {workOrderId:order.id,projectId:order.projectId,roles,...(skills!==undefined?{skills}:{}),approval:'PENDING',canExecute:false,canMerge:false};
 }
 export function canMerge({ci,review,approval,conflicts,security}) {
   return ci==='passed'&&review==='approved'&&approval==='approved'&&conflicts===false&&security==='passed';

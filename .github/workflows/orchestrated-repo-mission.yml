@@ -1,0 +1,45 @@
+name: Orchestrated Repo Mission (Draft PR Only)
+on:
+  workflow_dispatch:
+    inputs:
+      mission_spec_path:
+        description: 'Relative path to validated mission JSON spec'
+        required: true
+        type: string
+      publish_draft_pr:
+        description: 'Publish atomic fix branch and Draft PR (never auto-merges)'
+        required: false
+        default: false
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  orchestrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run syntax and unit gates on Control Center
+        run: |
+          npm run check
+          npm test
+      - name: Execute orchestrated HAK mission
+        env:
+          GITHUB_TOKEN: ${{ secrets.HAK_TARGET_REPO_PAT || secrets.GITHUB_TOKEN }}
+          HAK_AUTHORIZE_DRAFT_PR: ${{ inputs.publish_draft_pr && 'I_APPROVE_DRAFT_PR_ONLY' || '' }}
+        run: |
+          if [ "${{ inputs.publish_draft_pr }}" = "true" ]; then
+            node scripts/dispatch-mission.mjs "${{ inputs.mission_spec_path }}" --publish --out mission-report.json
+          else
+            node scripts/dispatch-mission.mjs "${{ inputs.mission_spec_path }}" --out mission-report.json
+          fi
+      - name: Retain sanitized mission evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: hak-mission-report
+          path: mission-report.json
+          if-no-files-found: error
+          retention-days: 30
