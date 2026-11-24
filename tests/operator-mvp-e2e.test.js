@@ -36,7 +36,7 @@ test('operator task: real HTTP model gateway contract, result viewing, restart p
  try{
   await new Promise(resolve=>gateway.listen(0,'127.0.0.1',resolve));
   const gatewayPort=gateway.address().port;
-  const port=41000+Math.floor(Math.random()*20000);
+  const port=20000+Math.floor(Math.random()*15000);
   const base='http://127.0.0.1:'+port;
   const env={...process.env,PORT:String(port),HAK_AGENT_OUTPUT_DIR:join(dir,'results'),
    HAK_EVENT_STORE_PATH:join(dir,'events.jsonl'),HAK_AGENT_EXECUTION_ENABLED:'true',

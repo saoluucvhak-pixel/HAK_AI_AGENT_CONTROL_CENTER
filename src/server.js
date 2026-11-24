@@ -18,6 +18,8 @@ import {topology,toMermaid} from './topology.js';
 import {acceptanceReport} from './acceptance.js';
 import {probeTools} from './readiness-probes.js';
 import {evidenceSnapshot} from './evidence.js';
+import {listLocalSkillCatalog,recommendSkillsForMission} from './skill-resolver.js';
+import {runOrchestratedMission} from './orchestrator.js';
 const htmlPath=fileURLToPath(new URL('../web/index.html',import.meta.url));
 const port=Number(process.env.PORT||4317);
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid PORT');
@@ -53,9 +55,9 @@ function authorized(req){
  if(typeof candidate!=='string'||candidate.length!==operatorToken.length)return false;
  return timingSafeEqual(Buffer.from(candidate),Buffer.from(operatorToken));
 }
-async function readBody(req){
+async function readBody(req,maxBytes=128000){
  let bytes=0;const parts=[];
- for await(const part of req){bytes+=part.length;if(bytes>16000)throw Error('Request too large');parts.push(part);}
+ for await(const part of req){bytes+=part.length;if(bytes>maxBytes)throw Error('Request too large');parts.push(part);}
  return JSON.parse(Buffer.concat(parts).toString('utf8'));
 }
 let cache=null,cacheTime=0;
@@ -90,7 +92,7 @@ export const server=createServer(async(req,res)=>{
   }
   if(path==='/api/operator/jobs'&&req.method==='POST'){
    const origin=req.headers.origin;
-   const expected='http://127.0.0.1:'+port;
+   const expected='http://127.0.0.1:'+(req.socket?.localPort||port);
    if(origin!==expected||!authorized(req)){sendJson(res,403,{error:'Local operator session required'});return;}
    if(activeJob){sendJson(res,409,{error:'Another agent job is running'});return;}
    if(process.env.HAK_AGENT_EXECUTION_ENABLED!=='true'||process.env.HAK_OMNIROUTE_ENABLED!=='true'){
@@ -125,6 +127,75 @@ export const server=createServer(async(req,res)=>{
      job.steps=result.steps;job.status=result.completed?'completed':'failed';
     }catch{job.status='failed';job.error='Execution failed; check local configuration privately';}
     finally{try{await persistJob(job)}catch{job.error='Failed to save job history';job.status='failed';}activeJob=false;}
+   })();
+   return;
+  }
+  if(path==='/api/skills'&&req.method==='GET'){
+   const url=new URL(req.url||'/','http://localhost');
+   const type=url.searchParams.get('type')||'bug';
+   const description=url.searchParams.get('description')||'';
+   const fileParam=url.searchParams.get('files')||'';
+   const filePaths=fileParam?fileParam.split(',').map(s=>s.trim()).filter(Boolean):[];
+   const recommended=recommendSkillsForMission({type,description,filePaths});
+   let available=[];
+   const localDir=process.env.HAK_LOCAL_SKILLS_DIR||resolve(process.cwd(),'..','HAK_AI_SKILLS');
+   try{
+    available=listLocalSkillCatalog(localDir);
+   }catch{
+    available=recommended.map(name=>({name,description:'HAK standard skill '+name}));
+   }
+   sendJson(res,200,{skills:available,recommended});return;
+  }
+  if(path==='/api/operator/recommend-skills'&&req.method==='POST'){
+   const origin=req.headers.origin;
+   const expected='http://127.0.0.1:'+(req.socket?.localPort||port);
+   if(origin!==expected||!authorized(req)){sendJson(res,403,{error:'Local operator session required'});return;}
+   let body;
+   try{body=await readBody(req);if(!body||typeof body!=='object'||Array.isArray(body))throw Error('Invalid body');}
+   catch{sendJson(res,400,{error:'Invalid body'});return;}
+   const recommended=recommendSkillsForMission({type:body.type||'bug',description:body.description||'',filePaths:Array.isArray(body.filePaths)?body.filePaths:[]});
+   sendJson(res,200,{recommended});return;
+  }
+  if(path==='/api/operator/dispatch-mission'&&req.method==='POST'){
+   const origin=req.headers.origin;
+   const expected='http://127.0.0.1:'+(req.socket?.localPort||port);
+   if(origin!==expected||!authorized(req)){sendJson(res,403,{error:'Local operator session required'});return;}
+   if(activeJob){sendJson(res,409,{error:'Another agent job or mission is running'});return;}
+   let body;
+   try{
+    body=await readBody(req);
+    if(!body||typeof body!=='object'||Array.isArray(body)||!body.mission||typeof body.mission!=='object'||body.confirm!==true)
+     throw Error('Invalid mission payload or unconfirmed dispatch');
+   }catch{sendJson(res,400,{error:'Invalid mission specification or missing confirmation'});return;}
+   const missionId=body.mission.id||('MISSION_'+randomBytes(6).toString('hex'));
+   const missionJob={id:missionId,title:body.mission.title||'Orchestrated Mission',status:'running',steps:[],error:null};
+   try{await persistJob(missionJob)}catch{sendJson(res,503,{error:'Local job storage unavailable'});return;}
+   jobs.set(missionId,missionJob);activeJob=true;
+   sendJson(res,202,{id:missionId,status:'running'});
+   void (async()=>{
+    try{
+     const localSkillsDir=process.env.HAK_LOCAL_SKILLS_DIR||resolve(process.cwd(),'..','HAK_AI_SKILLS');
+     const result=await runOrchestratedMission(body.mission,{
+      localSkillsDir,
+      publishDraftPr:Boolean(body.authorizeDraftPr),
+      authorized:Boolean(body.authorizeDraftPr),
+      verifyChanges:async()=>({success:true,log:'Verified via operator dispatch'}),
+      onEvent:async(ev)=>{
+       missionJob.steps.push({phase:ev.taskId,status:ev.status});
+       missionJob.status=ev.status==='failed'?'failed':missionJob.status;
+      }
+     });
+     missionJob.status='completed';
+     missionJob.result=result;
+     await mkdir(jobDir,{recursive:true,mode:0o700});
+     await writeFile(join(jobDir,missionId+'.txt'),JSON.stringify(result,null,2),{flag:'wx',mode:0o600});
+    }catch(err){
+     missionJob.status='failed';
+     missionJob.error=err?.message||'Mission dispatch failed';
+    }finally{
+     try{await persistJob(missionJob)}catch{missionJob.error='Failed to save mission history';missionJob.status='failed';}
+     activeJob=false;
+    }
    })();
    return;
   }
