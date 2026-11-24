@@ -76,7 +76,15 @@ export const server=createServer(async(req,res)=>{
    await observer(req,res,path);return;
   }
   if(path==='/api/operator/session'&&req.method==='GET'){
-   sendJson(res,200,{token:operatorToken,enabled:process.env.HAK_AGENT_EXECUTION_ENABLED==='true',orcaEnabled:process.env.HAK_ORCA_EXECUTION_ENABLED==='true',notice:'Local-only session; never share this token'});return;
+   sendJson(res,200,{
+    token:operatorToken,
+    enabled:process.env.HAK_AGENT_EXECUTION_ENABLED==='true',
+    orcaEnabled:process.env.HAK_ORCA_EXECUTION_ENABLED==='true',
+    rufloEnabled:process.env.HAK_RUFLO_EXECUTION_ENABLED==='true',
+    beaconEnabled:process.env.HAK_BEACON_MEMORY_ENABLED==='true',
+    fallbackReady:true,
+    notice:'Local-only session; never share this token'
+   });return;
   }
   if(path==='/api/operator/jobs'&&req.method==='GET'){
    sendJson(res,200,{jobs:[...jobs.values()].map(({id,title,targetRepo,status,steps,error})=>({id,title,targetRepo:targetRepo||null,status,steps,error}))});return;
@@ -95,7 +103,7 @@ export const server=createServer(async(req,res)=>{
   }
   if(path==='/api/operator/jobs'&&req.method==='POST'){
    const origin=req.headers.origin;
-   const expected='http://127.0.0.1:'+port;
+   const expected='http://127.0.0.1:'+(server.address()?.port||port);
    if(origin!==expected||!authorized(req)){sendJson(res,403,{error:'Local operator session required'});return;}
    if(activeJob){sendJson(res,409,{error:'Another agent job is running'});return;}
    if(process.env.HAK_AGENT_EXECUTION_ENABLED!=='true'){
@@ -163,6 +171,7 @@ export const server=createServer(async(req,res)=>{
        targetRepo,
        skills:resolvedSkills,
        orcaEnabled:process.env.HAK_ORCA_EXECUTION_ENABLED==='true',
+       rufloEnabled:process.env.HAK_RUFLO_EXECUTION_ENABLED==='true',
        confirm:true
       }),
       approval:{approved:true,workOrderId:id,approvedBy:'local-operator',reason:'Explicit confirmed local UI action'},
@@ -182,7 +191,7 @@ export const server=createServer(async(req,res)=>{
   }
   if(path==='/api/workflow/prepare'&&req.method==='POST'){
    const origin=req.headers.origin;
-   const expected='http://127.0.0.1:'+port;
+   const expected='http://127.0.0.1:'+(server.address()?.port||port);
    if(origin!==expected||!authorized(req)){sendJson(res,403,{error:'Local operator session required'});return;}
    let body;
    try{
@@ -206,7 +215,7 @@ export const server=createServer(async(req,res)=>{
   }
   if(path==='/api/github/create-pr'&&req.method==='POST'){
    const origin=req.headers.origin;
-   const expected='http://127.0.0.1:'+port;
+   const expected='http://127.0.0.1:'+(server.address()?.port||port);
    if(origin!==expected||!authorized(req)){sendJson(res,403,{error:'Local operator session required'});return;}
    if(process.env.HAK_GITHUB_WRITE_ENABLED!=='true'||!process.env.GITHUB_TOKEN){
     sendJson(res,503,{error:'GitHub write disabled. Set HAK_GITHUB_WRITE_ENABLED=true and GITHUB_TOKEN in .env first.'});return;

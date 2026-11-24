@@ -1,12 +1,15 @@
 import {readFile,mkdir,open,stat} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
-import {resolve,dirname} from 'node:path';
+import {resolve,dirname,basename} from 'node:path';
 import {EventStore} from './event-store.js';
+
+const SENSITIVE_BACKUP_FILE=/^(?:secrets\.json|\.env(?:\..*)?|tokens(?:\..*)?|.*\.(?:pem|key))$/i;
 
 export async function backupObserver({source='./data/agent-events.jsonl',destination}={}){
  if(typeof destination!=='string'||!destination.trim())throw new Error('Backup destination required');
  const src=resolve(source),dest=resolve(destination);
  if(src===dest)throw new Error('Backup destination must differ from source');
+ if(SENSITIVE_BACKUP_FILE.test(basename(src)))throw new Error('Refusing to back up sensitive credential file');
  const before=await stat(src);
  if(!before.isFile())throw new Error('Observer source must be a regular file');
  const original=await readFile(src);
