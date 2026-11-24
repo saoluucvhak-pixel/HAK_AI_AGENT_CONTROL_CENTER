@@ -108,7 +108,15 @@ async function refreshJobs(){
   const data=await r.json();$('operator-jobs').replaceChildren();
   for(const job of data.jobs){
    const card=el('article',undefined,'repo');
-   card.append(el('h3',job.title),el('p','Trạng thái: '+job.status+' · ID: '+job.id));
+   const skills=(job.steps||[]).flatMap(s=>(s.appliedSkills||[]).map(k=>k.name));
+   const uniqueSkills=[...new Set(skills)];
+   const meta=[
+    'Trạng thái: '+job.status,
+    'ID: '+job.id,
+    job.targetRepo?'Repo: '+job.targetRepo:null,
+    uniqueSkills.length?'Skills: '+uniqueSkills.join(', '):null
+   ].filter(Boolean).join(' · ');
+   card.append(el('h3',job.title),el('p',meta));
    if(job.error)card.append(el('p',job.error,'warning'));
    if(job.status==='completed'){
     const view=el('button','Xem kết quả AI');

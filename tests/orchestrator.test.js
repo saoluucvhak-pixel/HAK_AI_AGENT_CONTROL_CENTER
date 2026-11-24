@@ -50,3 +50,40 @@ test('prepareRepoWorkflow + executeApprovedWorkOrder injects skill context and a
  assert.match(seenPrompt,/Check leaderboard first/);
  assert.match(seenPrompt,/Target repository: saoluucvhak-pixel\/HAK_KHO_OFFLINE/);
 });
+
+test('prepareRepoWorkflow auto-triages failed CI runId and inspects hinted files',async()=>{
+ const sha='c'.repeat(40);
+ const mockFetch=async(url)=>{
+  if(url.endsWith('/actions/runs/99/jobs?per_page=100')){
+   return {ok:true,status:200,json:async()=>({jobs:[{id:501,name:'unit-tests',conclusion:'failure'}]})};
+  }
+  if(url.endsWith('/actions/jobs/501/logs')){
+   return {ok:true,status:200,text:async()=>'AssertionError at src/app.js expected 1 got 2'};
+  }
+  if(url.includes('/repos/saoluucvhak-pixel/HAK_KHO_OFFLINE/contents/src/app.js')){
+   const b64=Buffer.from('export const x = 2;','utf8').toString('base64');
+   return {ok:true,status:200,json:async()=>({type:'file',encoding:'base64',size:19,sha:'d'.repeat(40),content:b64})};
+  }
+  if(url.endsWith('/contents/skills')){
+   return {ok:true,status:200,json:async()=>[{type:'dir',name:'hak-code-auditor',path:'skills/hak-code-auditor'}]};
+  }
+  if(url.includes('/contents/skills/hak-code-auditor/SKILL.md')){
+   const b64=Buffer.from('---\nname: hak-code-auditor\ndescription: Audit code quality and tests\n---\n# Audit','utf8').toString('base64');
+   return {ok:true,status:200,json:async()=>({type:'file',encoding:'base64',size:72,content:b64})};
+  }
+  return {ok:false,status:404};
+ };
+
+ const wf=await prepareRepoWorkflow({
+  targetRepo:'HAK_KHO_OFFLINE',
+  commitSha:sha,
+  runId:99,
+  role:'testing',
+  fetchImpl:mockFetch
+ });
+ assert.equal(wf.ciTriage.failedJobCount,1);
+ assert.equal(wf.ciTriage.reports[0].classification,'test-assertion');
+ assert.equal(wf.inspection.files[0].path,'src/app.js');
+ assert.equal(wf.inspection.files[0].status,'available');
+ assert.equal(wf.skills[0].name,'hak-code-auditor');
+});

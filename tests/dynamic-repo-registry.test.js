@@ -19,10 +19,13 @@ test('parseRepoRef supports HAK_ALLOWED_REPOS env and rejects unknown repos',()=
  assert.ok(getAllowedRepositories().some(r=>r.fullName==='vercel-labs/skills'));
 });
 
-test('safeSourcePath allows SKILL.md, package.json, README.md and rejects traversal',()=>{
+test('safeSourcePath allows SKILL.md, package.json, README.md, web/config files and rejects traversal or workflows',()=>{
  assert.equal(safeSourcePath('skills/find-skills/SKILL.md'),'skills/find-skills/SKILL.md');
  assert.equal(safeSourcePath('package.json'),'package.json');
  assert.equal(safeSourcePath('README.md'),'README.md');
+ assert.equal(safeSourcePath('web/app.js'),'web/app.js');
+ assert.equal(safeSourcePath('config/repos.json'),'config/repos.json');
+ assert.throws(()=>safeSourcePath('.github/workflows/operations-dashboard-ci.yml'),/Invalid source path/);
  assert.throws(()=>safeSourcePath('skills/../secrets/SKILL.md'),/Invalid source path/);
  assert.throws(()=>safeSourcePath('.env'),/Invalid source path/);
 });
