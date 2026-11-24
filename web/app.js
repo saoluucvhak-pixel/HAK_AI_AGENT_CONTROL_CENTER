@@ -103,7 +103,7 @@ async function operatorSession(){
 }
 async function refreshJobs(){
  try{
-  const r=await fetch('/api/operator/jobs',{cache:'no-store'});
+  const r=await fetch('/api/operator/jobs',{cache:'no-store',headers:{'X-HAK-Operator-Token':operatorToken}});
   if(!r.ok)throw Error('Job API unavailable');
   const data=await r.json();$('operator-jobs').replaceChildren();
   for(const job of data.jobs){
@@ -143,4 +143,4 @@ $('agent-job-form').addEventListener('submit',async e=>{
  finally{button.disabled=false;}
 });
 $('refresh-jobs').addEventListener('click',refreshJobs);
-operatorSession();refreshJobs();
+operatorSession().then(refreshJobs);

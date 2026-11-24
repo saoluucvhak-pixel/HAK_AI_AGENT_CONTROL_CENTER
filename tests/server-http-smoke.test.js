@@ -20,7 +20,7 @@ test('real HTTP dashboard health endpoint and response headers',async()=>{
     const health=await response.json();
     assert.equal(health.ok,true);
     assert.equal(health.app,'hak-agent-control-center');
-    assert.equal(health.mode,'read-only');
+    assert.equal(health.mode,'operator');
   }finally{
     await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
   }

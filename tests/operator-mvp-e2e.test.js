@@ -61,7 +61,7 @@ test('operator task: real HTTP model gateway contract, result viewing, restart p
   const {id}=await submit.json();
   let job;
   for(let i=0;i<80;i++){
-   const list=await (await fetch(base+'/api/operator/jobs')).json();
+   const list=await (await fetch(base+'/api/operator/jobs',{headers:{'x-hak-operator-token':session.token}})).json();
    job=list.jobs.find(x=>x.id===id);
    if(job?.status==='completed'||job?.status==='failed')break;
    await sleep(100);
@@ -77,9 +77,9 @@ test('operator task: real HTTP model gateway contract, result viewing, restart p
   assert.match((await result.json()).content,/Reviewable AI response/);
   assert.match(await readFile(join(dir,'results',id+'.txt'),'utf8'),/Reviewable AI response/);
   await stop(child);child=launch();await ready(base,child);
-  const history=await (await fetch(base+'/api/operator/jobs')).json();
-  assert.equal(history.jobs.find(x=>x.id===id)?.status,'completed');
   const newSession=await (await fetch(base+'/api/operator/session')).json();
+  const history=await (await fetch(base+'/api/operator/jobs',{headers:{'x-hak-operator-token':newSession.token}})).json();
+  assert.equal(history.jobs.find(x=>x.id===id)?.status,'completed');
   const restored=await fetch(base+'/api/operator/results/'+id,{headers:{'x-hak-operator-token':newSession.token}});
   assert.equal(restored.status,200);
  }finally{
