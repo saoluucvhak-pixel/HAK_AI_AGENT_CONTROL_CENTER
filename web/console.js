@@ -151,3 +151,55 @@ $('backup').addEventListener('click',async()=>{
  try{const r=await api('/backups','POST',{});alert('Đã sao lưu '+r.fileCount+' tệp: '+r.name+'\n'+r.note);}
  catch(e){alert('Không sao lưu được: '+explain(e));}
 });
+
+// ---------- code changes (isolated worktree)
+const CC_STATUS={AWAITING_APPROVAL:'Chờ phê duyệt',RUNNING:'Đang chạy',TESTING:'Đang kiểm thử',VERIFIED:'Kiểm thử đạt — chờ phê duyệt xuất bản',BLOCKED:'Bị chặn',FAILED:'Thất bại',INTERRUPTED:'Bị gián đoạn',CANCELLED:'Đã hủy',PUBLISHED:'Đã xuất bản'};
+async function loadCode(){
+ try{
+  const [{repos},{changes},{workOrders}]=await Promise.all([api('/code/repos'),api('/code/changes'),api('/work-orders')]);
+  const rl=$('repos-list');rl.replaceChildren();
+  for(const r of repos){const a=el('article');a.append(el('h3',r.name),el('p',r.path+' · nhánh gốc '+r.defaultBranch+(r.githubRepo?' · GitHub '+r.githubRepo:' · chỉ cục bộ')));rl.append(a);}
+  const so=$('cc-order');const keepO=so.value;so.replaceChildren();for(const w of workOrders.filter(x=>x.status==='COMPLETED'))so.append(new Option(w.title+' ('+w.id+')',w.id));if(keepO)so.value=keepO;
+  const sr=$('cc-repo');const keepR=sr.value;sr.replaceChildren();for(const r of repos)sr.append(new Option(r.name,r.id));if(keepR)sr.value=keepR;
+  const box=$('code-changes');box.replaceChildren();
+  let active=false;
+  for(const c of changes){active=active||['RUNNING','TESTING'].includes(c.status);box.append(await ccCard(c.id));}
+  return active;
+ }catch(e){say('cc-message','Không tải được dữ liệu sửa mã: '+explain(e),true);return false;}
+}
+async function ccCard(id){
+ const c=await api('/code/changes/'+id);
+ const card=el('article',undefined,'repo');
+ const h=el('h3','Nhánh '+c.branch+' ');h.append(el('span',CC_STATUS[c.status]||c.status,'badge'));card.append(h);
+ card.append(el('p','Work Order '+c.orderId+' · gốc '+c.baseSha.slice(0,8)+' · phạm vi '+c.scope.join(', ')+' · kiểm thử '+c.verifyCommand));
+ for(const a of c.attempts){
+  const row=el('div',undefined,'task'+(a.verify&&!a.verify.passed||a.error?' bad':''));
+  row.append(el('strong','Lần '+a.n),document.createTextNode(' · '+(a.error?'bị từ chối: '+a.error:a.verify?(a.verify.passed?'kiểm thử đạt':'kiểm thử chưa đạt (mã '+a.verify.exitCode+')')+' trong '+a.verify.durationMs+' ms':'không có thay đổi')+(a.files?' · '+a.files.map(f=>f.path).join(', '):'')));
+  if(a.verify){const b=el('button','Xem kết quả kiểm thử','secondary');b.type='button';const out=el('pre',a.verify.output,'out');out.hidden=true;b.addEventListener('click',()=>{out.hidden=!out.hidden;});row.append(document.createTextNode(' '),b,out);}
+  card.append(row);
+ }
+ if(c.error)card.append(el('p',c.error.message,'err'));
+ if(c.pr)card.append(el('p','PR nháp #'+c.pr.number+': '+c.pr.url));
+ const row=el('div',undefined,'row');const msg=el('p','');
+ const btn=(t,fn,cls)=>{const b=el('button',t,cls);b.type='button';b.addEventListener('click',async()=>{b.disabled=true;try{await fn();await loadCode();await loadOverview();}catch(e){msg.textContent=explain(e);msg.className='err';if(e.info&&e.info.code==='CONFIRM_RERUN'&&confirm(e.message)){try{await api('/code/changes/'+c.id+'/start','POST',{rerunInterrupted:true});await loadCode();}catch(e2){msg.textContent=explain(e2);}}}finally{b.disabled=false;}});row.append(b);};
+ if(c.status==='AWAITING_APPROVAL'){
+  btn('Phê duyệt phạm vi và chạy kiểm thử',async()=>{if(!confirm('Phê duyệt: AI được sửa các tệp trong phạm vi '+c.scope.join(', ')+' trong workspace riêng, và máy này sẽ CHẠY mã đã sửa bằng '+c.verifyCommand+'. Tiếp tục?'))return;await api('/code/changes/'+c.id+'/approve','POST',{reason:'Phê duyệt từ giao diện'});await api('/code/changes/'+c.id+'/start','POST',{});});
+ }
+ if(['INTERRUPTED','BLOCKED','FAILED'].includes(c.status))btn('Chạy lại',async()=>{await api('/code/changes/'+c.id+'/start','POST',{});},'secondary');
+ if(c.status==='VERIFIED')btn('Phê duyệt xuất bản commit '+c.headSha.slice(0,8)+' và đẩy nhánh',async()=>{if(!confirm('Đẩy nhánh '+c.branch+' (commit '+c.headSha+') lên remote'+(c.githubRepo?' và mở PR nháp trên '+c.githubRepo:'')+'? Không tự merge.'))return;await api('/code/changes/'+c.id+'/approve-publish','POST',{reason:'Phê duyệt xuất bản'});await api('/code/changes/'+c.id+'/publish','POST',{});});
+ if(['RUNNING','TESTING','AWAITING_APPROVAL','VERIFIED','BLOCKED','INTERRUPTED','FAILED'].includes(c.status))btn('Hủy',async()=>{if(confirm('Hủy thay đổi mã này?'))await api('/code/changes/'+c.id+'/cancel','POST',{});},'danger');
+ card.append(row,msg);return card;
+}
+$('repo-form').addEventListener('submit',async ev=>{ev.preventDefault();
+ try{await api('/code/repos','POST',{name:$('r-name').value,path:$('r-path').value,githubRepo:$('r-gh').value||null,defaultBranch:$('r-branch').value||'main'});say('cc-message','Đã đăng ký repository.');$('repo-form').reset();$('r-branch').value='main';await loadCode();}
+ catch(e){say('cc-message','Không đăng ký được: '+explain(e),true);}});
+$('token-form').addEventListener('submit',async ev=>{ev.preventDefault();
+ try{await api('/code/github-token','PUT',{token:$('gh-token').value});$('gh-token').value='';say('cc-message','Đã lưu token trong kho bí mật.');}
+ catch(e){say('cc-message','Không lưu được token: '+explain(e),true);}});
+$('cc-form').addEventListener('submit',async ev=>{ev.preventDefault();
+ const scope=$('cc-scope').value.split('\n').map(x=>x.trim()).filter(Boolean);
+ try{await api('/code/changes','POST',{orderId:$('cc-order').value,repoId:$('cc-repo').value,scope,verifyCommand:$('cc-verify').value,maxRepairs:Number($('cc-repairs').value),consentExecuteCode:$('cc-consent').checked});say('cc-message','Đã tạo thay đổi mã. Xem phạm vi rồi phê duyệt để chạy.');await loadCode();}
+ catch(e){say('cc-message','Không tạo được: '+explain(e),true);}});
+let ccTimer=null;
+async function ccTick(){const active=await loadCode();clearTimeout(ccTimer);ccTimer=setTimeout(ccTick,active?2000:20000);}
+setTimeout(()=>{if(token)ccTick();},800);

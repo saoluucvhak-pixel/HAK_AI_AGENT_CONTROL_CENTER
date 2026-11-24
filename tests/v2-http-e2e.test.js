@@ -26,15 +26,18 @@ async function ready(base,child){
 }
 async function stop(child){if(child.exitCode!==null)return;const e=once(child,'exit');child.kill();await Promise.race([e,sleep(3000)]);}
 
-test('security + multi-agent HTTP flow on a real server, with restart persistence',{timeout:60000},async()=>{
+test('security + multi-agent HTTP flow on a real server, with restart persistence',{timeout:90000},async()=>{
  const dir=await mkdtemp(join(tmpdir(),'hak-v2-e2e-'));
+ const cleanups=[];
  const seen=[];
  const gateway=createServer(async(req,res)=>{
   const chunks=[];for await(const c of req)chunks.push(c);
   if(req.url==='/v1/models'){res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({data:[{id:'gw-model'}]}));return;}
   const body=JSON.parse(Buffer.concat(chunks).toString());seen.push({auth:req.headers.authorization,body});
   res.writeHead(200,{'content-type':'application/json'});
-  res.end(JSON.stringify({model:body.model,choices:[{message:{content:'Đề xuất #'+seen.length}}],usage:{prompt_tokens:10,completion_tokens:5}}));
+  const sys=body.messages[0]?.role==='system'?body.messages[0].content:'';
+  const content=/Agent chỉnh sửa mã/.test(sys)?JSON.stringify({summary:'thêm tính năng',edits:[{path:'src/feature.js',content:'export const feature=1;\n'}]}):'Đề xuất #'+seen.length;
+  res.end(JSON.stringify({model:body.model,choices:[{message:{content}}],usage:{prompt_tokens:10,completion_tokens:5}}));
  });
  let child;
  try{
@@ -86,12 +89,38 @@ test('security + multi-agent HTTP flow on a real server, with restart persistenc
   let order;
   for(let i=0;i<150;i++){order=await (await v2('/work-orders/'+wo.id)).json();if(['COMPLETED','FAILED','BLOCKED'].includes(order.status))break;await sleep(100);}
   assert.equal(order.status,'COMPLETED');
-  assert.equal(seen.length,5);
+  assert.equal(seen.length,5);const planCalls=5;void planCalls;
   assert.ok(seen.every(s=>s.auth==='Bearer '+key));
   const agg=await (await v2('/work-orders/'+wo.id+'/aggregate')).json();
   assert.match(agg.content,/Báo cáo doanh thu/);assert.match(agg.content,/Đề xuất #5/);
   const overview=await (await v2('/overview')).json();
   assert.equal(overview.orchestration.completed,1);assert.equal(overview.usage.inputTokens,50);
+
+  // --- code change over HTTP: register repo, gates, isolated edit, tests, publish to a local bare origin
+  const {makeRepo}=await import('./git-helpers.js');const {runGit}=await import('../src/safe-process.js');
+  const repoFx=await makeRepo();cleanups.push(repoFx.cleanup);
+  const bare=join(repoFx.dir,'origin.git');await runGit(['init','-q','--bare',bare],{cwd:repoFx.dir});await repoFx.g('remote','add','origin',bare);
+  const repoRes=await v2('/code/repos','POST',{name:'demo',path:repoFx.repo});assert.equal(repoRes.status,201);
+  const repoInfo=await repoRes.json();
+  assert.equal((await v2('/code/repos','POST',{name:'x',path:dir})).status,400,'a non-repository path is refused');
+  const noConsent=await v2('/code/changes','POST',{orderId:wo.id,repoId:repoInfo.id,scope:['src/**','test/**']});
+  assert.equal(noConsent.status,400);assert.equal((await noConsent.json()).code,'CONSENT');
+  const ccRes=await v2('/code/changes','POST',{orderId:wo.id,repoId:repoInfo.id,scope:['src/**','test/**'],consentExecuteCode:true});
+  assert.equal(ccRes.status,201);const cc=await ccRes.json();
+  const before=seen.length;
+  const early2=await v2('/code/changes/'+cc.id+'/start','POST',{});assert.equal(early2.status,409);
+  assert.equal(seen.length,before,'no model call before approval');
+  assert.equal((await v2('/code/changes/'+cc.id+'/approve','POST',{reason:'ok'})).status,200);
+  assert.equal((await v2('/code/changes/'+cc.id+'/start','POST',{})).status,202);
+  let change;
+  for(let i=0;i<200;i++){change=await (await v2('/code/changes/'+cc.id)).json();if(['VERIFIED','BLOCKED','FAILED'].includes(change.status))break;await sleep(150);}
+  assert.equal(change.status,'VERIFIED',JSON.stringify(change.error));
+  assert.equal((await repoFx.g('rev-parse','HEAD')).stdout.trim(),repoFx.sha,'user checkout untouched');
+  assert.equal((await v2('/code/changes/'+cc.id+'/publish','POST',{})).status,409,'publish needs gate 2');
+  assert.equal((await v2('/code/changes/'+cc.id+'/approve-publish','POST',{})).status,200);
+  const pub=await (await v2('/code/changes/'+cc.id+'/publish','POST',{})).json();
+  assert.equal(pub.status,'PUBLISHED');
+  assert.equal((await runGit(['rev-parse','refs/heads/'+change.branch],{cwd:bare})).stdout.trim(),change.headSha);
 
   // --- backup through the API
   const bk=await v2('/backups','POST',{});assert.equal(bk.status,201);
@@ -120,5 +149,6 @@ test('security + multi-agent HTTP flow on a real server, with restart persistenc
   if(child)await stop(child);
   await new Promise(r=>gateway.close(r));
   await rm(dir,{recursive:true,force:true});
+  for(const c of cleanups)await c();
  }
 });

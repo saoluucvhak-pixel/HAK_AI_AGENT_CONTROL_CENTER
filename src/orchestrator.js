@@ -143,6 +143,14 @@ export class Orchestrator{
   if(order.approvalId)await this.#approvals.revoke(order.approvalId,'Work Order bị hủy');
   return this.view(order);
  }
+ remainingTokens(id){const o=this.#get(id);return o.budget.maxTokens-(o.usage.inputTokens+o.usage.outputTokens);}
+ /** Lets follow-on work (code changes) spend from the same work-order budget. */
+ async chargeUsage(id,usage,costUsd){
+  const o=this.#get(id);
+  if(usage){o.usage.inputTokens+=usage.inputTokens||0;o.usage.outputTokens+=usage.outputTokens||0;}
+  if(costUsd==null)o.usage.costKnown=false;else o.usage.costUsd+=costUsd;
+  await this.#save(o);
+ }
  async getOutput(id,taskId){
   const order=this.#get(id);const t=order.tasks.find(x=>x.id===taskId);
   if(!t||t.status!=='COMPLETED')throw new OrchestratorError('NOT_FOUND','Chưa có kết quả');

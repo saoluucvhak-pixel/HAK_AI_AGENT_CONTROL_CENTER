@@ -8,18 +8,18 @@ const HINTS={
  AUTH:'Kiểm tra lại API key trong AI Provider Manager rồi thử lại.',CONFIG:'Mở AI Provider Manager, thêm hoặc bật một kết nối AI hợp lệ.',
  NETWORK:'Kiểm tra mạng hoặc dịch vụ gateway rồi thử lại.',TIMEOUT:'Tăng timeout hoặc thử lại sau.',RATE_LIMIT:'Chờ một lúc rồi thử lại.',UPSTREAM:'Nhà cung cấp đang lỗi; thử lại sau.',
  BUDGET:'Tăng giới hạn token/chi phí hoặc bắt đầu Work Order mới.',NOT_APPROVED:'Phê duyệt lại Work Order (phê duyệt hết hạn hoặc phạm vi đã đổi).',CONFIRM_RERUN:'Xác nhận chạy lại công việc bị gián đoạn nếu chấp nhận chi phí có thể lặp.',
- BAD_STATE:'Làm mới danh sách và kiểm tra trạng thái hiện tại.',NOT_FOUND:'Đối tượng không còn tồn tại; làm mới danh sách.',ALREADY_RUNNING:'Work Order đang chạy; chờ hoặc hủy.',INTEGRITY:'Dữ liệu trên đĩa bị thay đổi; khôi phục từ bản sao lưu.'
+ CONSENT:'Tích xác nhận chạy mã do AI viết trên máy này.',BASE_MOVED:'Tạo thay đổi mã mới từ nhánh gốc hiện tại rồi phê duyệt lại.',NO_GIT:'Cài Git for Windows (git phải có trong PATH) rồi thử lại.',NO_NPM:'Dùng lệnh kiểm thử node-test.',PUSH:'Kiểm tra quyền ghi remote / token GitHub rồi thử xuất bản lại.',BAD_EDITS:'AI đề xuất chỉnh sửa không hợp lệ; thử lại hoặc thu hẹp phạm vi.',PATH:'Đường dẫn nằm ngoài phạm vi được phê duyệt.',NOT_REPO:'Chọn đúng thư mục gốc của một repository git.',BAD_STATE:'Làm mới danh sách và kiểm tra trạng thái hiện tại.',NOT_FOUND:'Đối tượng không còn tồn tại; làm mới danh sách.',ALREADY_RUNNING:'Work Order đang chạy; chờ hoặc hủy.',INTEGRITY:'Dữ liệu trên đĩa bị thay đổi; khôi phục từ bản sao lưu.'
 };
 const RETRYABLE=new Set(['NETWORK','TIMEOUT','RATE_LIMIT','UPSTREAM']);
 export function describeError(error,step){
  const code=error?.code||'INVALID';
- const known=error&&(error.name==='ProviderError'||error.constructor?.name==='OrchestratorError'||['TOO_LARGE','BAD_JSON','INVALID'].includes(code));
+ const known=error&&(error.name==='ProviderError'||['OrchestratorError','CodeChangeError','WorkspaceError'].includes(error.constructor?.name)||['TOO_LARGE','BAD_JSON','INVALID'].includes(code));
  const message=known||code==='INVALID'?String(error?.message||'Yêu cầu không hợp lệ').slice(0,400):'Lỗi nội bộ';
  return {error:message,code,step,action:HINTS[code]||(code==='INVALID'?'Kiểm tra dữ liệu nhập và thử lại.':'Xem log cục bộ rồi thử lại.'),retryable:RETRYABLE.has(code)};
 }
-function statusFor(code){return {NOT_FOUND:404,NOT_APPROVED:409,BAD_STATE:409,BAD_TRANSITION:409,ALREADY_RUNNING:409,CONFIRM_RERUN:409,TOO_LARGE:413,BAD_JSON:400,CONFIG:400,INVALID:400,AUTH:502,NETWORK:502,TIMEOUT:504,RATE_LIMIT:429,UPSTREAM:502}[code]||500;}
+function statusFor(code){return {CONSENT:400,BASE_MOVED:409,NO_GIT:424,NO_NPM:424,NOT_REPO:400,PATH:400,BAD_EDITS:400,PUSH:502,NOT_FOUND:404,NOT_APPROVED:409,BAD_STATE:409,BAD_TRANSITION:409,ALREADY_RUNNING:409,CONFIRM_RERUN:409,TOO_LARGE:413,BAD_JSON:400,CONFIG:400,INVALID:400,AUTH:502,NETWORK:502,TIMEOUT:504,RATE_LIMIT:429,UPSTREAM:502}[code]||500;}
 
-export function createApiV2({getPort,token,providers,orchestrator,dataDir=null,onShutdown=null}){
+export function createApiV2({getPort,token,providers,orchestrator,codeChanges=null,secrets=null,dataDir=null,onShutdown=null}){
  const allow=createRateLimiter();
  return async function handle(req,res,path){
   if(!path.startsWith('/api/v2/'))return false;
@@ -59,6 +59,22 @@ export function createApiV2({getPort,token,providers,orchestrator,dataDir=null,o
     if(b&&c==='cancel'&&req.method==='POST'){step='cancel';send(await orchestrator.cancel(b,'local-operator',String(body.reason||'Người dùng hủy').slice(0,200)));return true;}
     if(b&&c==='output'&&d&&req.method==='GET'){step='read-output';send({content:await orchestrator.getOutput(b,d),notice:'Đề xuất do AI tạo; cần con người rà soát'});return true;}
     if(b&&c==='aggregate'&&req.method==='GET'){step='read-aggregate';send({content:await orchestrator.getAggregate(b),notice:'Đề xuất do AI tạo; cần con người rà soát'});return true;}
+   }
+   if(a==='code'&&codeChanges){
+    if(b==='repos'&&!c&&req.method==='GET'){send({repos:codeChanges.listRepos()});return true;}
+    if(b==='repos'&&!c&&req.method==='POST'){step='register-repo';send(await codeChanges.registerRepo(body),201);return true;}
+    if(b==='github-token'&&req.method==='PUT'&&secrets){step='save-token';if(typeof body.token!=='string'||body.token.length<20||body.token.length>400||/\s/.test(body.token)){const e=new Error('Token GitHub không hợp lệ');e.code='INVALID';throw e;}await secrets.set('github:token',body.token);send({ok:true,note:'Token được lưu trong kho bí mật, không hiển thị lại.'});return true;}
+    if(b==='changes'){
+     if(!c&&req.method==='GET'){send({changes:codeChanges.list()});return true;}
+     if(!c&&req.method==='POST'){step='create-code-change';send(await codeChanges.create(body),201);return true;}
+     if(c&&!d&&req.method==='GET'){send(codeChanges.get(c));return true;}
+     const act=d;
+     if(c&&act==='approve'&&req.method==='POST'){step='approve';send(await codeChanges.approve(c,{reason:body.reason}));return true;}
+     if(c&&act==='start'&&req.method==='POST'){step='start';send(await codeChanges.start(c,'local-operator',{rerunInterrupted:body.rerunInterrupted===true}),202);return true;}
+     if(c&&act==='cancel'&&req.method==='POST'){step='cancel';send(await codeChanges.cancel(c));return true;}
+     if(c&&act==='approve-publish'&&req.method==='POST'){step='approve-publish';send(await codeChanges.approvePublish(c,{reason:body.reason}));return true;}
+     if(c&&act==='publish'&&req.method==='POST'){step='publish';send(await codeChanges.publish(c));return true;}
+    }
    }
    if(a==='backups'&&dataDir){
     if(req.method==='GET'){send({backups:await listBackups(dataDir)});return true;}

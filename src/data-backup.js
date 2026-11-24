@@ -2,7 +2,7 @@ import {mkdir,readdir,readFile,writeFile,copyFile,rename,rm} from 'node:fs/promi
 import {createHash} from 'node:crypto';
 import {join,relative,resolve,sep,dirname} from 'node:path';
 
-const SKIP_DIRS=new Set(['backups','logs']);
+const SKIP_DIRS=new Set(['backups','logs','workspaces']); // workspaces are disposable git worktrees
 const sha=buf=>createHash('sha256').update(buf).digest('hex');
 async function walk(dir,base=dir,out=[]){
  for(const e of await readdir(dir,{withFileTypes:true})){

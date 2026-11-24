@@ -11,8 +11,8 @@ Trạng thái phát hành: **RELEASE CANDIDATE. Chưa đủ điều kiện stabl
 | TC04 | Gemini thật | BLOCKED | cần API key Google của người dùng |
 | TC05 | Giao việc 1 Agent, phê duyệt, kết quả, lịch sử | PASS (mô phỏng) | `operator-mvp-e2e`, `orchestrator.test.js` |
 | TC06 | Multi-Agent ≥ 4 Agent, handoff, dependency, tổng hợp | PASS (mô phỏng) | `orchestrator.test.js`, `v2-http-e2e` (5 Agent) |
-| TC07 | Agent sửa repo, branch, test, PR | NOT_IMPLEMENTED | backlog B-03 |
-| TC08 | CI lỗi → Agent sửa | NOT_IMPLEMENTED | backlog B-03 |
+| TC07 | Agent sửa repo, branch, test, PR | PARTIAL: PASS (repo git cục bộ + model mô phỏng + remote bare) | `code-change.test.js`; **chưa** chạy trên repo GitHub thật, **chưa** có model thật; PR nháp kiểm bằng fetch giả |
+| TC08 | CI lỗi → Agent sửa | NOT_IMPLEMENTED (vòng sửa kiểm thử cục bộ đã có; chưa lấy log GitHub CI) | backlog B-03 |
 | TC09 | Phê duyệt thiếu/hết hạn/đổi phạm vi bị từ chối | PASS | `approvals.test.js`, `orchestrator.test.js` |
 | TC10 | Mất kết nối AI | PASS (mô phỏng, mức đơn vị) | lỗi 5xx/mạng → RETRY_PENDING, dữ liệu giữ nguyên |
 | TC11 | Khởi động lại khi đang chạy | PASS (mô phỏng) | test crash recovery; HTTP restart |

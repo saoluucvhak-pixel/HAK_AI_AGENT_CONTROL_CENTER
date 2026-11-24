@@ -18,8 +18,8 @@ PR #126 (HAK_TEST_AI_WINDOWS) đang mở, chưa merge, không xung đột với 
 | Phê duyệt gắn phạm vi (server cấp, hết hạn, đổi phạm vi → hủy) | IMPLEMENTED_AND_VERIFIED | `approvals.test.js`, `orchestrator.test.js` |
 | Multi-Agent: DAG, handoff, song song, retry, timeout, hủy, tạm dừng, ngân sách, checkpoint | IMPLEMENTED_AND_VERIFIED (mô phỏng) | `orchestrator.test.js` (18 ca) |
 | Khôi phục sau gián đoạn (INTERRUPTED, không tự chạy lại) | IMPLEMENTED_AND_VERIFIED | test mô phỏng crash |
-| Agent sửa mã trên repository, tạo branch/PR, vòng lặp sửa CI | NOT_IMPLEMENTED | Agent hiện chỉ tạo đề xuất văn bản (`permissions.mode=text-only`) |
-| Workspace isolation (git worktree) | NOT_IMPLEMENTED | phụ thuộc mục trên |
+| Agent sửa mã: workspace cô lập (git worktree), sửa trong phạm vi được phê duyệt, kiểm thử cố định, tự sửa lại có giới hạn, phê duyệt lần 2 gắn đúng commit, đẩy nhánh `hak/*`, PR nháp | IMPLEMENTED_AND_VERIFIED (repo git cục bộ, model mô phỏng) | `code-change.test.js`, `workspace.test.js`, `v2-http-e2e.test.js`; chưa chạy trên repo GitHub thật, chưa có model thật |
+| Vòng lặp sửa lỗi CI GitHub (đọc log CI → sửa → cập nhật PR) | NOT_IMPLEMENTED | cơ chế sửa lại có sẵn; chưa nối nguồn phản hồi từ GitHub CI (module `github-ci-investigation` đã có) |
 | HAK AI Skills registry / Code Quality gate / Claude-Mem theo dự án | NOT_IMPLEMENTED (tích hợp) | module Claude-Mem bridge cũ chỉ là cầu "reviewed-export-only" |
 | OCR, Orca | PARTIALLY_IMPLEMENTED | probe kết nối; không tích hợp vào Work Order |
 | Kết nối Claude/Gemini thật | BLOCKED_BY_EXTERNAL_DEPENDENCY | cần API key của người dùng |
@@ -44,7 +44,7 @@ PR #126 (HAK_TEST_AI_WINDOWS) đang mở, chưa merge, không xung đột với 
 |---|---|---|---|
 | B-01 | P0 | Kiểm thử Claude thật + Gemini thật (TC03/TC04) | Khóa của người dùng; công việc không nhạy cảm; lưu bằng chứng |
 | B-02 | P0 | Chạy `release-windows.yml` xanh trên commit phát hành; kiểm thử cài trên Windows sạch (TC01/13/14, TC17 bởi người) | artifact + `INSTALLER_TEST_RESULTS.json` |
-| B-03 | P1 | Agent thực thi trên repo: worktree + branch + test + PR + theo dõi CI + sửa CI (TC07/08) | PR thật trên repo thử nghiệm |
+| B-03 | P1 | Còn lại: chạy trên repo GitHub thật được cấp quyền, nối phản hồi GitHub CI vào vòng sửa (TC07/08). Phần cục bộ đã xong | PR thật trên repo thử nghiệm; CI đỏ → Agent sửa → CI xanh |
 | B-04 | P1 | Hoàn thiện phục hồi trên UI và kiểm thử phục hồi trên máy độc lập (đã có sao lưu/xác minh/phục hồi dòng lệnh, TC12) | khôi phục độc lập, đối chiếu checksum |
 | B-05 | P1 | Tích hợp HAK Code Quality / Skills qua CLI có phiên bản | gate thật, không dùng kết quả AI tự đánh giá |
 | B-06 | P1 | Ký mã bộ cài | chứng thư do người có thẩm quyền cấp |
