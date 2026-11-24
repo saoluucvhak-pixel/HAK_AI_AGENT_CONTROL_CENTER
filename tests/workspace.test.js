@@ -118,3 +118,17 @@ test('push goes only to hak/* branches (local bare remote)',async()=>{
   assert.equal(remote.stdout.trim(),commit);
  }finally{await r.cleanup();}
 });
+
+import {gitNetworkEnv} from '../src/safe-process.js';
+test('push environment keeps the user transport/credential setup but never leaks HAK_* or provider keys; token header is appended, not replacing',()=>{
+ const base={PATH:'/bin',HTTPS_PROXY:'http://p:1',GIT_SSL_CAINFO:'/ca.pem',GIT_ASKPASS:'/ask',GIT_CONFIG_COUNT:'2',GIT_CONFIG_KEY_0:'url.x.insteadOf',GIT_CONFIG_VALUE_0:'y',GIT_CONFIG_KEY_1:'credential.helper',GIT_CONFIG_VALUE_1:'h',HAK_OMNIROUTE_API_KEY:'secret-secret-secret',ANTHROPIC_API_KEY:'sk-ant-xxxxxxxxxxxxxxxx'};
+ const env=gitNetworkEnv(base,[['http.extraheader','AUTHORIZATION: basic abc']]);
+ assert.equal(env.HTTPS_PROXY,'http://p:1');assert.equal(env.GIT_SSL_CAINFO,'/ca.pem');assert.equal(env.GIT_ASKPASS,'/ask');
+ assert.equal(env.GIT_CONFIG_COUNT,'3');
+ assert.equal(env.GIT_CONFIG_KEY_0,'url.x.insteadOf');assert.equal(env.GIT_CONFIG_KEY_1,'credential.helper');assert.equal(env.GIT_CONFIG_KEY_2,'http.extraheader');
+ assert.equal(env.GIT_TERMINAL_PROMPT,'0');
+ assert.equal(env.HAK_OMNIROUTE_API_KEY,undefined);assert.equal(env.ANTHROPIC_API_KEY,undefined);
+ assert.equal(env.GIT_CONFIG_GLOBAL,undefined,'global config (credential manager) stays usable for push');
+ const strict=scrubbedEnv({},base);
+ assert.equal(strict.HTTPS_PROXY,undefined);assert.equal(strict.GIT_CONFIG_COUNT,undefined);
+});

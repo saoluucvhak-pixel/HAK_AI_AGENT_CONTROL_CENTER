@@ -127,8 +127,8 @@ export class Workspace{
  }
  async push(worktree,{remote='origin',branch,token=null}){
   if(!/^hak\/[a-z0-9][a-z0-9-]{2,60}$/.test(branch))throw new WorkspaceError('BAD_BRANCH','Chỉ được đẩy nhánh hak/*');
-  const extraEnv=token?{GIT_CONFIG_COUNT:'1',GIT_CONFIG_KEY_0:'http.extraheader',GIT_CONFIG_VALUE_0:'AUTHORIZATION: basic '+Buffer.from('x-access-token:'+token).toString('base64')}:{};
-  const r=await this.#git(['push','--',remote,'refs/heads/'+branch+':refs/heads/'+branch],{cwd:worktree,timeoutMs:120000,extraEnv,secrets:token?[token]:[]});
+  const extraConfig=token?[['http.extraheader','AUTHORIZATION: basic '+Buffer.from('x-access-token:'+token).toString('base64')]]:[];
+  const r=await this.#git(['push','--',remote,'refs/heads/'+branch+':refs/heads/'+branch],{cwd:worktree,timeoutMs:120000,network:true,extraConfig,secrets:token?[token]:[]});
   if(r.code!==0)throw new WorkspaceError('PUSH','Đẩy nhánh thất bại: '+r.stderr.trim().slice(0,300));
   return true;
  }
