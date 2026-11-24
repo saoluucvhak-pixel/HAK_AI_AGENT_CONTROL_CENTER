@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseSkillMarkdown,findSkills,fetchGithubSkillsIndex,fetchGithubSkill,auditSkillSafety} from '../src/skills-registry.js';
+import {parseSkillMarkdown,findSkills,fetchGithubSkillsIndex,fetchGithubSkill,auditSkillSafety,validateStructuredFindings} from '../src/skills-registry.js';
 
 test('parseSkillMarkdown extracts frontmatter, body, and sha256',()=>{
  const parsed=parseSkillMarkdown('---\nname: find-skills\ndescription: "Discover skills"\n---\n\n# Find Skills\nRun npx skills find.',{source:'github:vercel-labs/skills'});
@@ -65,4 +65,28 @@ test('auditSkillSafety blocks unsafe curl-pipe-sh or prompt override skills',()=
  assert.equal(blocked.verdict,'BLOCK');
  assert.ok(blocked.findings.includes('remote-shell-pipe'));
  assert.ok(blocked.findings.includes('prompt-override'));
+});
+
+test('validateStructuredFindings enforces confirmed/needs_validation/rejected schema rules',()=>{
+ const report=validateStructuredFindings([
+  {title:'SQL injection in query',verdict:'confirmed',severity:'high',file:'src/db.js'},
+  {title:'Unverified auth header forwarding',verdict:'needs_validation',file:'src/proxy.js'},
+  {title:'False positive on static literal',verdict:'rejected'}
+ ]);
+ assert.equal(report.confirmedCount,1);
+ assert.equal(report.needsValidationCount,1);
+ assert.equal(report.rejectedCount,1);
+ assert.throws(()=>validateStructuredFindings([{title:'Bad',verdict:'needs_validation',severity:'high'}]),/must not assert severity/);
+});
+
+test('fetchGithubSkillsIndex reads cloudflare/security-audit-skill skills/security-audit',async()=>{
+ const mockFetch=async(url)=>{
+  if(url.endsWith('/repos/cloudflare/security-audit-skill/contents/skills')){
+   return {ok:true,status:200,json:async()=>[{type:'dir',name:'security-audit',path:'skills/security-audit'}]};
+  }
+  return {ok:false,status:404};
+ };
+ const idx=await fetchGithubSkillsIndex('cloudflare/security-audit-skill',{fetchImpl:mockFetch});
+ assert.equal(idx[0].name,'security-audit');
+ assert.equal(idx[0].basePath,'skills');
 });

@@ -7,16 +7,42 @@ const MAX_SKILL_BYTES=32768;
 const SKILL_NAME=/^[a-z0-9][a-z0-9-]{0,79}$/;
 
 const ROLE_SKILL_HINTS={
- architecture:['hak-archify-architecture','archify','hak-code-auditor'],
+ architecture:['hak-archify-architecture','archify','security-audit','hak-code-auditor'],
  ui:['hak-ui-designer','hak-ui-ux-pro-max','hak-vercel-web-design','hak-unslop-design'],
  backend:['fix-finding','security-diff-scan','hak-code-auditor','hak-data-integrity','hak-migration-manager'],
  data:['hak-parent-child-data-model','hak-data-integrity','hak-smart-filter'],
- security:['security-scan','triage-finding','check-skills','hak-electron-security','hak-code-auditor'],
- testing:['triage-finding','verify-fix','hak-code-auditor','hak-payroll-validator'],
- quality:['verify-fix','security-diff-scan','hak-code-auditor','hak-unslop-design'],
+ security:['security-audit','security-scan','triage-finding','check-skills','hak-electron-security','hak-code-auditor'],
+ testing:['triage-finding','verify-fix','security-audit','hak-code-auditor','hak-payroll-validator'],
+ quality:['verify-fix','security-diff-scan','security-audit','hak-code-auditor','hak-unslop-design'],
  release:['hak-release-builder'],
  ocr:['hak-document-markdown','hak-accounting-report']
 };
+
+const VALID_FINDING_VERDICTS=new Set(['confirmed','needs_validation','rejected']);
+export function validateStructuredFindings(findings){
+ if(!Array.isArray(findings))throw new Error('Findings must be an array');
+ const normalized=findings.map((f,i)=>{
+  if(!f||typeof f!=='object'||Array.isArray(f))throw new Error('Invalid finding at index '+i);
+  if(typeof f.title!=='string'||!f.title.trim())throw new Error('Finding title required at index '+i);
+  if(!VALID_FINDING_VERDICTS.has(f.verdict))throw new Error('Invalid finding verdict at index '+i);
+  if(f.verdict==='needs_validation'&&f.severity!==undefined&&f.severity!==null)throw new Error('needs_validation finding must not assert severity');
+  return {
+   id:typeof f.id==='string'&&f.id.trim()?f.id.trim():'finding-'+(i+1),
+   title:f.title.trim().slice(0,200),
+   verdict:f.verdict,
+   severity:f.verdict==='confirmed'&&typeof f.severity==='string'?f.severity:null,
+   file:typeof f.file==='string'?f.file.slice(0,240):null
+  };
+ });
+ return {
+  kind:'hak-structured-findings',
+  total:normalized.length,
+  confirmedCount:normalized.filter(x=>x.verdict==='confirmed').length,
+  needsValidationCount:normalized.filter(x=>x.verdict==='needs_validation').length,
+  rejectedCount:normalized.filter(x=>x.verdict==='rejected').length,
+  findings:normalized
+ };
+}
 
 const SKILL_REPO_BASE_PATHS={
  'openai/codex-security':'plugins/codex-security/skills'

@@ -54,6 +54,10 @@ export async function prepareRepoWorkflow({
  if(Array.isArray(requestedSkills)&&requestedSkills.length>0){
   const wanted=new Set(requestedSkills);
   selected=catalog.filter(s=>wanted.has(s.name));
+ }else if(workflowMode==='security-audit'){
+  const auditNames=new Set(['security-audit','triage-finding','fix-finding','verify-fix','hak-code-auditor']);
+  selected=catalog.filter(s=>auditNames.has(s.name));
+  if(selected.length===0)selected=findSkills(effectiveQuery,{role:'security',skills:catalog,limit:4});
  }else if(workflowMode==='fix-and-verify'){
   const pipelineNames=new Set(['triage-finding','fix-finding','verify-fix','hak-code-auditor']);
   selected=catalog.filter(s=>pipelineNames.has(s.name));
@@ -85,7 +89,7 @@ export async function prepareRepoWorkflow({
   inspection=await githubSourceInspection(ref.fullName,commitSha,effectivePaths,{fetchImpl,token,env,extraRepos,allowAnyTarget:true});
  }
 
- const recommendedRoles=workflowMode==='fix-and-verify'?['testing','backend','quality']:[role];
+ const recommendedRoles=workflowMode==='security-audit'?['security','testing','backend','quality']:workflowMode==='fix-and-verify'?['testing','backend','quality']:[role];
 
  return {
   schemaVersion:1,
