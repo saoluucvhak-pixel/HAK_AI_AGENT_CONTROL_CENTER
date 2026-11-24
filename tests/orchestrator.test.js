@@ -159,7 +159,7 @@ test('pause lets running tasks finish, then PAUSED; resume completes',async()=>{
  try{
   const o=await s.orchestrator.create(input({agents:['architecture','backend','frontend']}));
   await s.orchestrator.approve(o.id);await s.orchestrator.start(o.id);
-  await new Promise(r=>setTimeout(r,20));
+  for(let i=0;i<200&&s.orchestrator.get(o.id).tasks.find(t=>t.id==='architecture').status!=='RUNNING';i++)await new Promise(r=>setTimeout(r,10));
   await s.orchestrator.pause(o.id);await s.orchestrator.whenIdle(o.id);
   const paused=s.orchestrator.get(o.id);
   assert.equal(paused.status,'PAUSED');
