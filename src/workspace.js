@@ -1,6 +1,6 @@
 import {mkdir,writeFile,rm} from 'node:fs/promises';
 import {join,dirname,resolve} from 'node:path';
-import {existsSync} from 'node:fs';
+import {existsSync,realpathSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {runGit,runProcess,scrubbedEnv} from './safe-process.js';
 import {validateEditPath,assertInsideRoot,matchesScope,PathError} from './code-paths.js';
@@ -8,6 +8,11 @@ import {validateEditPath,assertInsideRoot,matchesScope,PathError} from './code-p
 const SHA=/^[a-f0-9]{40}$/;
 const MAX_EDITS=20,MAX_FILE=100*1024,MAX_TOTAL=300*1024;
 export class WorkspaceError extends Error{constructor(code,message){super(message);this.code=code;}}
+function canonical(p){
+ let real=p;try{real=realpathSync.native(p);}catch{/* fall back to the raw path */}
+ const n=real.replace(/\\/g,'/').replace(/\/+$/,'');
+ return process.platform==='win32'?n.toLowerCase():n;
+}
 const sha256=t=>createHash('sha256').update(t).digest('hex');
 
 function npmCli(){
@@ -42,7 +47,8 @@ export class Workspace{
   const root=resolve(repoPath);
   const top=await this.#git(['rev-parse','--show-toplevel'],{cwd:root});
   if(top.code!==0)throw new WorkspaceError('NOT_REPO','Đường dẫn không phải repository git');
-  if(resolve(top.stdout.trim())!==root&&top.stdout.trim().replace(/\\/g,'/').toLowerCase()!==root.replace(/\\/g,'/').toLowerCase())throw new WorkspaceError('NOT_REPO','Hãy chỉ định thư mục gốc của repository');
+  // Compare real paths: on Windows one side may be an 8.3 short name (RUNNER~1) and the other the long name, with / vs \.
+  if(canonical(top.stdout.trim())!==canonical(root))throw new WorkspaceError('NOT_REPO','Hãy chỉ định thư mục gốc của repository');
   return {root};
  }
  async resolveBase(repoPath,ref){
