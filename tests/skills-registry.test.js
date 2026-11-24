@@ -102,3 +102,19 @@ test('fetchGithubSkillsIndex reads vercel-labs/agent-browser skills/agent-browse
  assert.equal(idx[0].name,'agent-browser');
  assert.equal(idx[0].basePath,'skills');
 });
+
+test('fetchGithubSkillsIndex and fetchGithubSkill support vercel-labs/web-interface-guidelines command.md',async()=>{
+ const mockFetch=async(url)=>{
+  if(url.endsWith('/repos/vercel-labs/web-interface-guidelines/contents/command.md')){
+   const b64=Buffer.from('---\ndescription: Review UI code\n---\n# Web Interface Guidelines','utf8').toString('base64');
+   return {ok:true,status:200,json:async()=>({type:'file',encoding:'base64',size:60,content:b64})};
+  }
+  return {ok:false,status:404};
+ };
+ const idx=await fetchGithubSkillsIndex('vercel-labs/web-interface-guidelines',{fetchImpl:mockFetch});
+ assert.equal(idx[0].name,'web-interface-guidelines');
+ assert.equal(idx[0].basePath,'command.md');
+ const skill=await fetchGithubSkill('vercel-labs/web-interface-guidelines','web-interface-guidelines',{fetchImpl:mockFetch});
+ assert.equal(skill.name,'web-interface-guidelines');
+ assert.match(skill.body,/Web Interface Guidelines/);
+});
