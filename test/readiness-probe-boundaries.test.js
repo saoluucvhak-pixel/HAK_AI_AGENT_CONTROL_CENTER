@@ -10,8 +10,8 @@ test('only loopback HTTP root endpoints accepted',()=>{
 });
 test('reachable endpoints remain connectivity-only, never provider verified',async()=>{
  const requests=[];
- const report=await probeTools({env:{HAK_OMNIROUTE_URL:'http://127.0.0.1:8111/',HAK_RUFLO_URL:'http://localhost:8112/'},fetchImpl:async(url,opts)=>{requests.push({url,opts});return {ok:true,status:200}}});
- assert.deepEqual(requests.map(x=>x.url),['http://127.0.0.1:8111/v1/models','http://localhost:8112/health']);
+ const report=await probeTools({env:{HAK_RUFLO_URL:'http://localhost:8112/',HAK_CLAUDE_MEM_URL:'http://127.0.0.1:8111/'},fetchImpl:async(url,opts)=>{requests.push({url,opts});return {ok:true,status:200}}});
+ assert.deepEqual(requests.map(x=>x.url),['http://localhost:8112/health','http://127.0.0.1:8111/health']);
  assert.ok(requests.every(x=>x.opts.redirect==='manual'));
  assert.equal(report.readyForProduction,false);
  assert.equal(report.kind,'local-connectivity-only');
