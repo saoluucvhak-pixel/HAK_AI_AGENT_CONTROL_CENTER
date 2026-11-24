@@ -132,3 +132,17 @@ test('push environment keeps the user transport/credential setup but never leaks
  const strict=scrubbedEnv({},base);
  assert.equal(strict.HTTPS_PROXY,undefined);assert.equal(strict.GIT_CONFIG_COUNT,undefined);
 });
+
+import {verifySteps} from '../src/workspace.js';
+import {npmInstallEnv} from '../src/safe-process.js';
+test('npm-ci-test: install step uses --ignore-scripts and proxy env; the test step gets no proxy/credentials',()=>{
+ const steps=verifySteps('npm-ci-test');
+ assert.equal(steps.length,2);
+ assert.ok(steps[0].install&&steps[0].args.includes('ci')&&steps[0].args.includes('--ignore-scripts'));
+ assert.equal(steps[1].install,undefined);assert.deepEqual(steps[1].args.slice(-1),['test']);
+ const base={PATH:'/bin',HTTPS_PROXY:'http://p:1',npm_config_https_proxy:'http://p:1',GITHUB_TOKEN:'ghp_x',HAK_X:'s',ANTHROPIC_API_KEY:'k'};
+ const env=npmInstallEnv(base);
+ assert.equal(env.HTTPS_PROXY,'http://p:1');assert.equal(env.GITHUB_TOKEN,undefined);assert.equal(env.HAK_X,undefined);assert.equal(env.ANTHROPIC_API_KEY,undefined);
+ assert.equal(scrubbedEnv({},base).HTTPS_PROXY,undefined);
+ assert.throws(()=>verifySteps('npm ci; curl x'),/danh sách cho phép/);
+});

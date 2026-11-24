@@ -2,7 +2,7 @@ import {mkdir,writeFile,rm} from 'node:fs/promises';
 import {join,dirname,resolve} from 'node:path';
 import {existsSync,realpathSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {runGit,runProcess,scrubbedEnv} from './safe-process.js';
+import {runGit,runProcess,scrubbedEnv,npmInstallEnv} from './safe-process.js';
 import {validateEditPath,assertInsideRoot,matchesScope,PathError} from './code-paths.js';
 
 const SHA=/^[a-f0-9]{40}$/;
@@ -19,13 +19,21 @@ function npmCli(){
  const bases=[join(resolve(process.execPath,'..'),'node_modules','npm','bin','npm-cli.js'),join(resolve(process.execPath,'..','..'),'lib','node_modules','npm','bin','npm-cli.js')];
  return bases.find(existsSync)||null;
 }
-/** Verification commands are fixed argv arrays chosen by id from the approval record, never text from model output. */
-export function verifyCommand(id){
- if(id==='node-test')return {cmd:process.execPath,args:['--test']};
- if(id==='npm-test'){const cli=npmCli();if(!cli)throw new WorkspaceError('NO_NPM','Không tìm thấy npm đi kèm Node; dùng lệnh node-test');return {cmd:process.execPath,args:[cli,'test']};}
+/**
+ * Verification commands are fixed argv lists chosen by id from the approval record, never text from model output.
+ * Each step: {cmd,args,install?}. `install` steps get proxy/CA variables (they download dependencies) and run with --ignore-scripts.
+ */
+export function verifySteps(id){
+ if(id==='node-test')return [{cmd:process.execPath,args:['--test']}];
+ if(id==='npm-test'||id==='npm-ci-test'){
+  const cli=npmCli();if(!cli)throw new WorkspaceError('NO_NPM','Không tìm thấy npm đi kèm Node; dùng lệnh node-test');
+  const test={cmd:process.execPath,args:[cli,'test']};
+  return id==='npm-test'?[test]:[{cmd:process.execPath,args:[cli,'ci','--ignore-scripts','--no-audit','--no-fund'],install:true},test];
+ }
  throw new WorkspaceError('BAD_COMMAND','Lệnh kiểm thử không nằm trong danh sách cho phép');
 }
-export const VERIFY_IDS=Object.freeze(['node-test','npm-test']);
+export const verifyCommand=id=>verifySteps(id)[0];
+export const VERIFY_IDS=Object.freeze(['node-test','npm-test','npm-ci-test']);
 
 /** Isolated git worktrees: the user's checkout (HEAD, index, working tree) is never touched. */
 export class Workspace{
@@ -119,11 +127,17 @@ export class Workspace{
   return this.headSha(worktree);
  }
  async verify(worktree,commandId,{timeoutMs=300000,signal}={}){
-  const {cmd,args}=verifyCommand(commandId);
-  const started=Date.now();
-  const r=await runProcess(cmd,args,{cwd:worktree,timeoutMs,signal,maxBytes:64*1024,env:scrubbedEnv({CI:'1'})});
-  const text=(r.stdout+(r.stderr?'\n'+r.stderr:'')).slice(-8000);
-  return {passed:r.code===0&&!r.timedOut&&!r.aborted,exitCode:r.code,timedOut:r.timedOut,aborted:r.aborted,durationMs:Date.now()-started,output:text,outputSha256:sha256(text)};
+  const steps=verifySteps(commandId);
+  const started=Date.now();let text='',code=0,timedOut=false,aborted=false;
+  for(const st of steps){
+   const left=Math.max(1000,timeoutMs-(Date.now()-started));
+   const r=await runProcess(st.cmd,st.args,{cwd:worktree,timeoutMs:left,signal,maxBytes:64*1024,env:st.install?npmInstallEnv():scrubbedEnv({CI:'1'})});
+   text+=(st.install?'[cài phụ thuộc]\n':'')+(r.stdout+(r.stderr?'\n'+r.stderr:''))+'\n';
+   code=r.code;timedOut=r.timedOut;aborted=r.aborted;
+   if(r.code!==0||r.timedOut||r.aborted)break;
+  }
+  const out=text.slice(-8000);
+  return {passed:code===0&&!timedOut&&!aborted,exitCode:code,timedOut,aborted,durationMs:Date.now()-started,output:out,outputSha256:sha256(out)};
  }
  async push(worktree,{remote='origin',branch,token=null}){
   if(!/^hak\/[a-z0-9][a-z0-9-]{2,60}$/.test(branch))throw new WorkspaceError('BAD_BRANCH','Chỉ được đẩy nhánh hak/*');

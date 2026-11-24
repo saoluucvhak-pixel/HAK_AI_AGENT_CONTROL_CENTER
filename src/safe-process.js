@@ -37,6 +37,13 @@ export function runProcess(cmd,args,{cwd,env=scrubbedEnv(),timeoutMs=60000,maxBy
 // Git for Windows rejects Node's os.devNull (\\.\nul); it needs the plain DOS name.
 const NULL_DEVICE=process.platform==='win32'?'NUL':'/dev/null';
 const HOOKS_DIR=join(tmpdir(),'hak-empty-hooks');
+const NPM_NET=['HTTPS_PROXY','HTTP_PROXY','NO_PROXY','https_proxy','http_proxy','no_proxy','npm_config_https_proxy','npm_config_proxy','npm_config_noproxy','npm_config_cafile','NODE_EXTRA_CA_CERTS','SSL_CERT_FILE','SSL_CERT_DIR'];
+/** Dependency download step only: proxy / CA settings so the registry is reachable. The test step never gets these. */
+export function npmInstallEnv(base=process.env){
+ const env=scrubbedEnv({CI:'1'},base);
+ for(const k of NPM_NET)if(base[k]!==undefined)env[k]=base[k];
+ return env;
+}
 const NET_PASSTHROUGH=['HTTPS_PROXY','HTTP_PROXY','ALL_PROXY','NO_PROXY','https_proxy','http_proxy','all_proxy','no_proxy','GIT_SSL_CAINFO','GIT_SSL_NO_VERIFY','SSL_CERT_FILE','SSL_CERT_DIR','SSH_AUTH_SOCK','GIT_ASKPASS','SSH_ASKPASS','GCM_INTERACTIVE','GIT_SSH_COMMAND'];
 /**
  * Environment for git operations that talk to a remote (push). The user's own transport/credential setup
