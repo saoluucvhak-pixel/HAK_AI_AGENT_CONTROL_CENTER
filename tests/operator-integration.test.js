@@ -105,6 +105,25 @@ test('server serves UI, operator session with fallbackReady, and runs jobs via i
     assert.equal(resultRes.status, 200);
     const resultJson = await resultRes.json();
     assert.match(resultJson.content, /internal-skill-guided-fallback/);
+
+    const prepRes = await fetch(`${base}/api/workflow/prepare`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Origin': base,
+        'x-hak-operator-token': session.token,
+      },
+      body: JSON.stringify({
+        targetRepo: 'saoluucvhak-pixel/HAK_LUONG_OFFLINE',
+        workflowMode: 'accounting-audit',
+        includeRemoteSkills: false,
+      }),
+    });
+    assert.equal(prepRes.status, 200);
+    const prepJson = await prepRes.json();
+    assert.equal(prepJson.workflowMode, 'accounting-audit');
+    assert.deepEqual(prepJson.recommendedRoles, ['data', 'testing', 'quality']);
+    assert.match(prepJson.missionPrompt, /HAK_LUONG_OFFLINE/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     if (prevNodeEnv === undefined) delete process.env.NODE_ENV;

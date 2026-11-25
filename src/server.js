@@ -129,7 +129,8 @@ export const server=createServer(async(req,res)=>{
    const commitSha=typeof body.commitSha==='string'&&/^[a-f0-9]{40}$/.test(body.commitSha.trim())?body.commitSha.trim():null;
    const runId=Number.isSafeInteger(body.runId)&&body.runId>0?body.runId:null;
    const paths=Array.isArray(body.paths)?body.paths.filter(p=>typeof p==='string'&&p.trim()).slice(0,10):[];
-   const workflowMode=body.workflowMode==='fix-and-verify'?'fix-and-verify':'single';
+   const ALLOWED_MODES=new Set(['single','fix-and-verify','security-audit','accounting-audit','ui-unslop']);
+   const workflowMode=ALLOWED_MODES.has(body.workflowMode)?body.workflowMode:'single';
    const job={id,title:body.title.trim(),targetRepo,status:'running',steps:[],error:null};
    try{await persistJob(job)}catch{sendJson(res,503,{error:'Local job storage unavailable'});return;}
    jobs.set(id,job);activeJob=true;
@@ -139,10 +140,10 @@ export const server=createServer(async(req,res)=>{
      let resolvedSkills=[];
      let enrichedDescription=body.description;
      let roles=[body.role];
-     if(targetRepo||requestedSkills.length>0||workflowMode==='fix-and-verify'){
-      const wf=await prepareRepoWorkflow({targetRepo:targetRepo||'HAK_AI_AGENT_CONTROL_CENTER',commitSha,runId,paths,query:body.title+' '+body.description,role:body.role,workflowMode,requestedSkills,includeRemoteSkills:requestedSkills.length>0||Boolean(targetRepo)||workflowMode==='fix-and-verify'});
+     if(targetRepo||requestedSkills.length>0||workflowMode!=='single'){
+      const wf=await prepareRepoWorkflow({targetRepo:targetRepo||'HAK_AI_AGENT_CONTROL_CENTER',commitSha,runId,paths,query:body.title+' '+body.description,role:body.role,workflowMode,requestedSkills,includeRemoteSkills:requestedSkills.length>0||Boolean(targetRepo)||workflowMode!=='single'});
       resolvedSkills=wf.skills;
-      if(workflowMode==='fix-and-verify')roles=wf.recommendedRoles;
+      if(workflowMode!=='single')roles=wf.recommendedRoles;
       const ctxParts=[];
       if(wf.ciTriage?.reports?.length){
        ctxParts.push('[CI_TRIAGE]\n'+wf.ciTriage.reports.map(r=>`${r.name}: ${r.classification} - ${r.nextAction}`).join('\n'));
@@ -200,6 +201,7 @@ export const server=createServer(async(req,res)=>{
     parseTargetRepo(body.targetRepo);
    }catch{sendJson(res,400,{error:'Invalid workflow preparation request'});return;}
    try{
+    const ALLOWED_MODES=new Set(['single','fix-and-verify','security-audit','accounting-audit','ui-unslop']);
     const wf=await prepareRepoWorkflow({
      targetRepo:body.targetRepo,
      commitSha:typeof body.commitSha==='string'?body.commitSha:null,
@@ -207,7 +209,9 @@ export const server=createServer(async(req,res)=>{
      paths:Array.isArray(body.paths)?body.paths:[],
      query:typeof body.query==='string'?body.query:'',
      role:typeof body.role==='string'?body.role:'backend',
-     requestedSkills:Array.isArray(body.skills)?body.skills:[]
+     workflowMode:ALLOWED_MODES.has(body.workflowMode)?body.workflowMode:'single',
+     requestedSkills:Array.isArray(body.skills)?body.skills:[],
+     includeRemoteSkills:body.includeRemoteSkills!==false
     });
     sendJson(res,200,wf);
    }catch(err){sendJson(res,400,{error:String(err.message||err)});}
