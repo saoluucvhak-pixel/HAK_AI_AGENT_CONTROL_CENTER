@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseSkillMarkdown,findSkills,fetchGithubSkillsIndex,fetchGithubSkill,auditSkillSafety,validateStructuredFindings,deduplicateSkills} from '../src/skills-registry.js';
+import {parseSkillMarkdown,findSkills,fetchGithubSkillsIndex,fetchGithubSkill,auditSkillSafety,validateStructuredFindings,deduplicateSkills,discoverAllSkills,clearSkillDiscoveryCache} from '../src/skills-registry.js';
 
 test('parseSkillMarkdown extracts frontmatter, body, and sha256',()=>{
  const parsed=parseSkillMarkdown('---\nname: find-skills\ndescription: "Discover skills"\n---\n\n# Find Skills\nRun npx skills find.',{source:'github:vercel-labs/skills'});
@@ -198,5 +198,26 @@ test('fetchGithubSkillsIndex and fetchGithubSkill support ruvnet/ruflo and heyda
  const usSkill=await fetchGithubSkill('heydamir/unslop','unslop',{fetchImpl:mockFetch});
  assert.equal(usSkill.name,'unslop');
  assert.match(usSkill.body,/Unslop/);
+});
+
+test('discoverAllSkills caches results when useCache=true and resets on clearSkillDiscoveryCache',async()=>{
+ clearSkillDiscoveryCache();
+ let calls=0;
+ const mockFetch=async(url)=>{
+  calls++;
+  if(url.endsWith('/repos/obra/superpowers/contents/skills')){
+   return {ok:true,status:200,json:async()=>([{type:'dir',name:'systematic-debugging'}])};
+  }
+  return {ok:false,status:404};
+ };
+ const first=await discoverAllSkills({localDir:'./nonexistent-dir',fetchImpl:mockFetch,useCache:true,ttlMs:60000});
+ const callsAfterFirst=calls;
+ assert.ok(callsAfterFirst>0);
+ const second=await discoverAllSkills({localDir:'./nonexistent-dir',fetchImpl:mockFetch,useCache:true,ttlMs:60000});
+ assert.equal(calls,callsAfterFirst);
+ assert.deepEqual(second,first);
+ clearSkillDiscoveryCache();
+ await discoverAllSkills({localDir:'./nonexistent-dir',fetchImpl:mockFetch,useCache:true,ttlMs:60000});
+ assert.ok(calls>callsAfterFirst);
 });
 
