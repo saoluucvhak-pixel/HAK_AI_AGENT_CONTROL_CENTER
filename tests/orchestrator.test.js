@@ -187,3 +187,37 @@ test('buildSessionMissionPrompt produces 5-phase single-prompt mission for curre
  assert.match(prompt,/systematic-debugging, test-driven-development/);
  assert.match(prompt,/5\. Ship:/);
 });
+
+test('prepareRepoWorkflow supports accounting-audit and ui-unslop presets',async()=>{
+ const mockFetch=async(url)=>{
+  if(url.endsWith('/repos/saoluucvhak-pixel/HAK_AI_SKILLS/contents/skills')){
+   return {ok:true,status:200,json:async()=>([
+    {type:'dir',name:'hak-accounting-report',path:'skills/hak-accounting-report'},
+    {type:'dir',name:'hak-payroll-validator',path:'skills/hak-payroll-validator'}
+   ])};
+  }
+  if(url.endsWith('/repos/saoluucvhak-pixel/HAK_AI_SKILLS/contents/skills/hak-accounting-report/SKILL.md')){
+   const b64=Buffer.from('---\nname: hak-accounting-report\ndescription: Accounting standard\n---\n# Accounting','utf8').toString('base64');
+   return {ok:true,status:200,json:async()=>({type:'file',encoding:'base64',size:80,content:b64})};
+  }
+  if(url.endsWith('/repos/saoluucvhak-pixel/HAK_AI_SKILLS/contents/skills/hak-payroll-validator/SKILL.md')){
+   const b64=Buffer.from('---\nname: hak-payroll-validator\ndescription: Payroll validator\n---\n# Payroll','utf8').toString('base64');
+   return {ok:true,status:200,json:async()=>({type:'file',encoding:'base64',size:80,content:b64})};
+  }
+  if(url.endsWith('/repos/heydamir/unslop/contents/skills')){
+   return {ok:true,status:200,json:async()=>([{type:'dir',name:'unslop',path:'skills/unslop'}])};
+  }
+  if(url.endsWith('/repos/heydamir/unslop/contents/skills/unslop/SKILL.md')){
+   const b64=Buffer.from('---\nname: unslop\ndescription: UI design\n---\n# Unslop','utf8').toString('base64');
+   return {ok:true,status:200,json:async()=>({type:'file',encoding:'base64',size:60,content:b64})};
+  }
+  return {ok:false,status:404};
+ };
+ const accWf=await prepareRepoWorkflow({targetRepo:'saoluucvhak-pixel/HAK_LUONG_OFFLINE',workflowMode:'accounting-audit',fetchImpl:mockFetch});
+ assert.deepEqual(accWf.recommendedRoles,['data','testing','quality']);
+ assert.deepEqual(accWf.skills.map(s=>s.name).sort(),['hak-accounting-report','hak-payroll-validator']);
+
+ const uiWf=await prepareRepoWorkflow({targetRepo:'saoluucvhak-pixel/HAK_XUATHANG_APP',workflowMode:'ui-unslop',fetchImpl:mockFetch});
+ assert.deepEqual(uiWf.recommendedRoles,['ui','testing','quality']);
+ assert.deepEqual(uiWf.skills.map(s=>s.name).sort(),['unslop','web-interface-guidelines']);
+});

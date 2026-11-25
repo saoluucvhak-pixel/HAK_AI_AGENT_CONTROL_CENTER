@@ -215,9 +215,24 @@ export function findSkills(query='',{role='',skills=[],limit=10}={}){
   .map(x=>x.skill);
 }
 
-export async function discoverAllSkills({localDir='./skills',fetchImpl=fetch,token=process.env.GITHUB_TOKEN,includeRemote=true}={}){
+const SKILL_DISCOVERY_CACHE=new Map();
+const DEFAULT_SKILL_CACHE_TTL_MS=5*60*1000;
+
+export function clearSkillDiscoveryCache(){
+ SKILL_DISCOVERY_CACHE.clear();
+}
+
+export async function discoverAllSkills({localDir='./skills',fetchImpl=fetch,token=process.env.GITHUB_TOKEN,includeRemote=true,useCache=(fetchImpl===fetch),ttlMs=DEFAULT_SKILL_CACHE_TTL_MS}={}){
+ const cacheKey=localDir+'|'+(includeRemote?'1':'0');
+ if(useCache&&ttlMs>0){
+  const cached=SKILL_DISCOVERY_CACHE.get(cacheKey);
+  if(cached&&Date.now()-cached.ts<ttlMs)return cached.skills;
+ }
  const local=await loadLocalSkills(localDir);
- if(!includeRemote)return local;
+ if(!includeRemote){
+  if(useCache&&ttlMs>0)SKILL_DISCOVERY_CACHE.set(cacheKey,{ts:Date.now(),skills:local});
+  return local;
+ }
  const repos=getSkillRepositories();
  const remoteLists=await Promise.all(repos.map(async ref=>{
   try{
@@ -227,5 +242,7 @@ export async function discoverAllSkills({localDir='./skills',fetchImpl=fetch,tok
    return [];
   }
  }));
- return deduplicateSkills([...local,...remoteLists.flat()]);
+ const result=deduplicateSkills([...local,...remoteLists.flat()]);
+ if(useCache&&ttlMs>0)SKILL_DISCOVERY_CACHE.set(cacheKey,{ts:Date.now(),skills:result});
+ return result;
 }
