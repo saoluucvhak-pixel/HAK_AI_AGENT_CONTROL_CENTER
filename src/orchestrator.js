@@ -64,9 +64,13 @@ export async function prepareRepoWorkflow({
   selected=catalog.filter(s=>pipelineNames.has(s.name));
   if(selected.length===0)selected=findSkills(effectiveQuery,{role,skills:catalog,limit:4});
  }else if(workflowMode==='accounting-audit'){
-  const accNames=new Set(['hak-accounting-report','hak-payroll-validator','hak-code-auditor','verification-before-completion']);
+  const accNames=new Set(['hak-accounting-report','hak-payroll-validator','hak-excel-import-templates','hak-code-auditor','verification-before-completion']);
   selected=catalog.filter(s=>accNames.has(s.name));
   if(selected.length===0)selected=findSkills(effectiveQuery,{role:'ocr',skills:catalog,limit:4});
+ }else if(workflowMode==='excel-import'){
+  const excelNames=new Set(['hak-excel-import-templates','hak-accounting-report','hak-data-integrity','verification-before-completion']);
+  selected=catalog.filter(s=>excelNames.has(s.name));
+  if(selected.length===0)selected=findSkills(effectiveQuery,{role:'data',skills:catalog,limit:4});
  }else if(workflowMode==='ui-unslop'){
   const uiNames=new Set(['unslop','web-interface-guidelines','agent-browser','hak-ui-designer','hak-unslop-design']);
   selected=catalog.filter(s=>uiNames.has(s.name));
@@ -108,6 +112,7 @@ export async function prepareRepoWorkflow({
  const recommendedRoles=workflowMode==='security-audit'?['security','testing','backend','quality']
   :workflowMode==='fix-and-verify'?['testing','backend','quality']
   :workflowMode==='accounting-audit'?['data','testing','quality']
+  :workflowMode==='excel-import'?['data','ui','testing','quality']
   :workflowMode==='ui-unslop'?['ui','testing','quality']
   :[role];
  const missionPrompt=buildSessionMissionPrompt({targetRepo:ref.fullName,goal:effectiveQuery,workflowMode,skills:resolvedSkills,recommendedRoles});

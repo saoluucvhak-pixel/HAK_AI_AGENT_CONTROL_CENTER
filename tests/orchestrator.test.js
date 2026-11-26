@@ -220,4 +220,8 @@ test('prepareRepoWorkflow supports accounting-audit and ui-unslop presets',async
  const uiWf=await prepareRepoWorkflow({targetRepo:'saoluucvhak-pixel/HAK_XUATHANG_APP',workflowMode:'ui-unslop',fetchImpl:mockFetch});
  assert.deepEqual(uiWf.recommendedRoles,['ui','testing','quality']);
  assert.deepEqual(uiWf.skills.map(s=>s.name).sort(),['unslop','web-interface-guidelines']);
+
+ const excelWf=await prepareRepoWorkflow({targetRepo:'saoluucvhak-pixel/HAK_XUATHANG_APP',workflowMode:'excel-import',fetchImpl:mockFetch});
+ assert.deepEqual(excelWf.recommendedRoles,['data','ui','testing','quality']);
+ assert.ok(excelWf.skills.some(s=>s.name==='hak-accounting-report'));
 });

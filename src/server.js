@@ -129,7 +129,7 @@ export const server=createServer(async(req,res)=>{
    const commitSha=typeof body.commitSha==='string'&&/^[a-f0-9]{40}$/.test(body.commitSha.trim())?body.commitSha.trim():null;
    const runId=Number.isSafeInteger(body.runId)&&body.runId>0?body.runId:null;
    const paths=Array.isArray(body.paths)?body.paths.filter(p=>typeof p==='string'&&p.trim()).slice(0,10):[];
-   const ALLOWED_MODES=new Set(['single','fix-and-verify','security-audit','accounting-audit','ui-unslop']);
+   const ALLOWED_MODES=new Set(['single','fix-and-verify','security-audit','accounting-audit','excel-import','ui-unslop']);
    const workflowMode=ALLOWED_MODES.has(body.workflowMode)?body.workflowMode:'single';
    const job={id,title:body.title.trim(),targetRepo,status:'running',steps:[],error:null};
    try{await persistJob(job)}catch{sendJson(res,503,{error:'Local job storage unavailable'});return;}
@@ -201,7 +201,7 @@ export const server=createServer(async(req,res)=>{
     parseTargetRepo(body.targetRepo);
    }catch{sendJson(res,400,{error:'Invalid workflow preparation request'});return;}
    try{
-    const ALLOWED_MODES=new Set(['single','fix-and-verify','security-audit','accounting-audit','ui-unslop']);
+    const ALLOWED_MODES=new Set(['single','fix-and-verify','security-audit','accounting-audit','excel-import','ui-unslop']);
     const wf=await prepareRepoWorkflow({
      targetRepo:body.targetRepo,
      commitSha:typeof body.commitSha==='string'?body.commitSha:null,
