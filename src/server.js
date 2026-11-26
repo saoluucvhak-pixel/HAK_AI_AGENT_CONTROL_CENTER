@@ -55,8 +55,9 @@ try{
 function sendJson(res,status,body){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(body));}
 function authorized(req){
  const candidate=req.headers['x-hak-operator-token'];
- if(typeof candidate!=='string'||candidate.length!==operatorToken.length)return false;
- return timingSafeEqual(Buffer.from(candidate),Buffer.from(operatorToken));
+ if(typeof candidate!=='string')return false;
+ const supplied=Buffer.from(candidate),expected=Buffer.from(operatorToken);
+ return supplied.length===expected.length&&timingSafeEqual(supplied,expected);
 }
 async function readBody(req){
  let bytes=0;const parts=[];
@@ -71,6 +72,8 @@ export const server=createServer(async(req,res)=>{
  res.setHeader('X-Content-Type-Options','nosniff');
  res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'");
  try{
+  const expectedHost='127.0.0.1:'+(server.address()?.port||port);
+  if(req.headers.host!==expectedHost){sendJson(res,403,{error:'Invalid local Host'});return;}
   const path=new URL(req.url||'/', 'http://localhost').pathname;
   if(path==='/api/agent-events'||path==='/api/agent-status'){
    await observer(req,res,path);return;
