@@ -2,6 +2,12 @@
 
 Quản lý task và giám sát AI Agent HAK. Mọi thay đổi chức năng đi qua PR và CI.
 
+## Khóa công khai cấp phép dùng chung HAK
+
+Agent tích hợp cấp phép HAK v4 lấy [HAK-PublicKey.jwk](https://raw.githubusercontent.com/saoluucvhak-pixel/HAK_AI_AGENT_CONTROL_CENTER/main/config/licensing/HAK-PublicKey.jwk) từ repo này. Đưa file vào repo ứng dụng và nhúng vào bộ xác minh của Setup và app chính khi đóng gói. Dùng lại cùng khóa qua các phiên bản ứng dụng. Các bản đã đóng gói xác minh giấy phép offline.
+
+Khóa là Ed25519 public JWK. SHA-256 của 32 byte thu được khi giải mã Base64URL trường `x` là `d30874bfa60984599b21222284e9b1a14bcd41146f947771531b99b3cf07b34a`. HAK giữ bản sao phục hồi `.hakkey` và mật khẩu tại máy quản trị.
+
 ## Windows quick start
 
 Install Node.js 22+ once, then double-click `HAK_START_WINDOWS.cmd`. It starts the local dashboard at http://127.0.0.1:4317 and opens your browser. If HAK is already running, it opens the existing instance; if another program owns the port, it refuses to connect to it. Task Observer status reads require no manual token. Sending agent events still requires a configured bearer token. This is not a Windows installer or an acceptance of external AI agents.
